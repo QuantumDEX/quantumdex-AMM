@@ -1,7 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { useAccount } from "wagmi";
+import { useRouter } from "next/navigation";
+import { useAccount, useWalletClient } from "wagmi";
+import { createPool, AMM_CONTRACT_ADDRESS } from "@/lib/amm";
+import { walletClientToSigner } from "@/config/adapter";
 
 const feeTiers = [
   { value: "0.01%", description: "Best for stable pairs with minimal volatility." },
@@ -17,7 +21,73 @@ const launchChecklist = [
 ];
 
 export default function CreatePoolPage() {
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
+  const { data: walletClient } = useWalletClient();
+  const router = useRouter();
+  
+  const [token0, setToken0] = useState("");
+  const [token1, setToken1] = useState("");
+  const [amount0, setAmount0] = useState("");
+  const [amount1, setAmount1] = useState("");
+  const [selectedFeeTier, setSelectedFeeTier] = useState("0.01%");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!isConnected || !walletClient || !address) {
+      setError("Please connect your wallet");
+      return;
+    }
+
+    if (!token0 || !token1 || !amount0 || !amount1) {
+      setError("Please fill in all fields");
+      return;
+    }
+
+    if (!AMM_CONTRACT_ADDRESS) {
+      setError("Contract address not configured");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      setSuccess(null);
+
+      const signer = await walletClientToSigner(walletClient);
+      if (!signer) {
+        throw new Error("Failed to get signer");
+      }
+
+      // Convert amounts to BigInt (assuming 18 decimals for now)
+      const amount0BigInt = BigInt(Math.floor(parseFloat(amount0) * 1e18));
+      const amount1BigInt = BigInt(Math.floor(parseFloat(amount1) * 1e18));
+
+      const result = await createPool(
+        token0,
+        token1,
+        amount0BigInt,
+        amount1BigInt,
+        AMM_CONTRACT_ADDRESS,
+        signer
+      );
+
+      setSuccess(`Pool created successfully! Pool ID: ${result.poolId.substring(0, 10)}...`);
+      
+      // Redirect to pool details after a short delay
+      setTimeout(() => {
+        router.push(`/pools/${encodeURIComponent(result.poolId)}`);
+      }, 2000);
+    } catch (err) {
+      console.error("Error creating pool:", err);
+      setError(err instanceof Error ? err.message : "Failed to create pool");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-12 px-6 py-14">
@@ -34,7 +104,7 @@ export default function CreatePoolPage() {
       </header>
 
       <section className="grid gap-6 lg:grid-cols-[3fr,2fr]">
-        <form className="space-y-6 rounded-3xl border border-zinc-200/60 bg-white/80 p-6 shadow-sm dark:border-zinc-800/60 dark:bg-zinc-900/70">
+        <form onSubmit={handleSubmit} className="space-y-6 rounded-3xl border border-zinc-200/60 bg-white/80 p-6 shadow-sm dark:border-zinc-800/60 dark:bg-zinc-900/70">
           <div>
             <label className="text-xs font-semibold uppercase tracking-[0.35em] text-zinc-500 dark:text-zinc-400">
               Token Pair
@@ -45,6 +115,8 @@ export default function CreatePoolPage() {
                 <input
                   type="text"
                   placeholder="0x... (token address)"
+                  value={token0}
+                  onChange={(e) => setToken0(e.target.value)}
                   className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700 focus:border-emerald-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950/60 dark:text-zinc-100"
                 />
               </div>
@@ -53,6 +125,8 @@ export default function CreatePoolPage() {
                 <input
                   type="text"
                   placeholder="0x... (token address)"
+                  value={token1}
+                  onChange={(e) => setToken1(e.target.value)}
                   className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700 focus:border-emerald-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950/60 dark:text-zinc-100"
                 />
               </div>
@@ -97,7 +171,13 @@ export default function CreatePoolPage() {
                   key={tier.value}
                   className="flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm shadow-sm transition hover:border-emerald-400 dark:border-zinc-700 dark:bg-zinc-950/50"
                 >
-                  <input type="radio" name="fee-tier" className="mt-1 accent-emerald-500" defaultChecked={tier.value === "0.01%"} />
+                  <input 
+                    type="radio" 
+                    name="fee-tier" 
+                    className="mt-1 accent-emerald-500" 
+                    checked={selectedFeeTier === tier.value}
+                    onChange={() => setSelectedFeeTier(tier.value)}
+                  />
                   <div>
                     <p className="font-semibold text-zinc-900 dark:text-zinc-50">{tier.value}</p>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">{tier.description}</p>
@@ -117,6 +197,9 @@ export default function CreatePoolPage() {
                 <input
                   type="number"
                   placeholder="e.g. 100"
+                  value={amount0}
+                  onChange={(e) => setAmount0(e.target.value)}
+                  step="0.000000000000000001"
                   className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700 focus:border-emerald-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950/60 dark:text-zinc-100"
                 />
               </div>
@@ -125,18 +208,33 @@ export default function CreatePoolPage() {
                 <input
                   type="number"
                   placeholder="e.g. 120,000"
+                  value={amount1}
+                  onChange={(e) => setAmount1(e.target.value)}
+                  step="0.000000000000000001"
                   className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700 focus:border-emerald-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950/60 dark:text-zinc-100"
                 />
               </div>
             </div>
           </div>
 
+          {error && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-4 text-sm text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200">
+              {error}
+            </div>
+          )}
+          
+          {success && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+              {success}
+            </div>
+          )}
+
           <button
-            type="button"
+            type="submit"
             className="w-full rounded-2xl bg-emerald-500 py-4 text-base font-semibold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-600 disabled:bg-zinc-300 disabled:text-zinc-500"
-            disabled={!isConnected}
+            disabled={!isConnected || loading}
           >
-            {isConnected ? "Deploy Pool" : "Connect Wallet to Deploy"}
+            {loading ? "Creating Pool..." : isConnected ? "Deploy Pool" : "Connect Wallet to Deploy"}
           </button>
         </form>
 

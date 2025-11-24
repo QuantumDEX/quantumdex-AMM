@@ -1,4 +1,4 @@
-import { Contract, JsonRpcProvider, JsonRpcSigner } from "ethers";
+import { Contract, JsonRpcProvider, JsonRpcSigner, Provider } from "ethers";
 import AMM_ABI from "./abi/AMM.json";
 import MOCK_TOKEN_ABI from "./abi/MockToken.json";
 import { publicClientToProvider, walletClientToSigner } from "@/config/adapter";
@@ -32,7 +32,7 @@ export type PoolCreatedEvent = {
  */
 export const getAMMContract = (
   address: string,
-  signerOrProvider: JsonRpcSigner | JsonRpcProvider
+  signerOrProvider: JsonRpcSigner | Provider
 ): Contract => {
   return new Contract(address, AMM_ABI, signerOrProvider);
 };
@@ -42,7 +42,7 @@ export const getAMMContract = (
  */
 export const getTokenContract = (
   address: string,
-  signerOrProvider: JsonRpcSigner | JsonRpcProvider
+  signerOrProvider: JsonRpcSigner | Provider
 ): Contract => {
   return new Contract(address, MOCK_TOKEN_ABI, signerOrProvider);
 };
@@ -53,7 +53,7 @@ export const getTokenContract = (
 export const getPool = async (
   poolId: string,
   contractAddress: string,
-  provider: JsonRpcProvider
+  provider: Provider
 ): Promise<PoolInfo | null> => {
   try {
     const contract = getAMMContract(contractAddress, provider);
@@ -80,7 +80,7 @@ export const getUserLiquidity = async (
   poolId: string,
   userAddress: string,
   contractAddress: string,
-  provider: JsonRpcProvider
+  provider: Provider
 ): Promise<bigint> => {
   try {
     const contract = getAMMContract(contractAddress, provider);
@@ -100,7 +100,7 @@ export const getPoolId = async (
   tokenB: string,
   feeBps: number,
   contractAddress: string,
-  provider: JsonRpcProvider
+  provider: Provider
 ): Promise<string> => {
   try {
     const contract = getAMMContract(contractAddress, provider);
@@ -117,7 +117,7 @@ export const getPoolId = async (
  */
 export const getAllPools = async (
   contractAddress: string,
-  provider: JsonRpcProvider,
+  provider: Provider,
   fromBlock?: number
 ): Promise<PoolCreatedEvent[]> => {
   try {
