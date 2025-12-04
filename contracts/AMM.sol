@@ -220,6 +220,13 @@ contract AMM is ReentrancyGuard, Ownable {
         emit LiquidityAdded(poolId, msg.sender, liquidity, amount0, amount1);
     }
 
+    /// @notice Removes liquidity from a pool
+    /// @dev Prevents removing liquidity that would leave the pool below MINIMUM_LIQUIDITY.
+    /// This ensures the locked liquidity protection remains effective.
+    /// @param poolId The pool identifier
+    /// @param liquidity Amount of liquidity tokens to burn
+    /// @return amount0 Amount of token0 received
+    /// @return amount1 Amount of token1 received
     function removeLiquidity(
         bytes32 poolId,
         uint256 liquidity
