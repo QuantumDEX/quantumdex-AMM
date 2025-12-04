@@ -19,6 +19,9 @@ export default defineConfig({
   },
   // Primary deployment target: Base Sepolia (testnet) and Base (mainnet)
   defaultNetwork: "baseSepolia", // Use "base" for mainnet deployment
+  paths: {
+    tests: "./test",
+  },
   networks: {
     // View the networks that are pre-configured.
     // If the network you are looking for is not here you can add new network settings
