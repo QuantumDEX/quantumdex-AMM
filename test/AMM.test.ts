@@ -995,4 +995,39 @@ describe("AMM", async () => {
       "Should prevent removing all remaining liquidity"
     );
   });
+
+  it("works correctly with different token decimals", async () => {
+    // Test with tokens that have different decimal places
+    const tokenW = await viem.deployContract("MockToken", ["TokenW", "TKW", 6], {
+      account: deployer.account,
+    });
+    const tokenX = await viem.deployContract("MockToken", ["TokenX", "TKX", 18], {
+      account: deployer.account,
+    });
+
+    const amount6 = 10_000n * 10n ** 6n;  // 6 decimals
+    const amount18 = 20_000n * 10n ** 18n; // 18 decimals
+
+    await tokenW.write.approve([amm.address, amount6], { account: deployer.account });
+    await tokenX.write.approve([amm.address, amount18], { account: deployer.account });
+
+    const tx = await amm.write.createPool(
+      [tokenW.address, tokenX.address, amount6, amount18],
+      { account: deployer.account }
+    );
+    await publicClient.getTransactionReceipt({ hash: tx });
+
+    const events = await publicClient.getContractEvents({
+      address: amm.address,
+      abi: amm.abi,
+      eventName: "PoolCreated",
+      fromBlock: 0n,
+      strict: true,
+    });
+
+    const decimalsPoolId = (events[events.length - 1] as any).args.poolId as `0x${string}`;
+    const lockedBalance = await amm.read.getLpBalance([decimalsPoolId, "0x0000000000000000000000000000000000000000"]);
+
+    assert.equal(lockedBalance, 1000n, "MINIMUM_LIQUIDITY should be 1000 regardless of token decimals");
+  });
 });
