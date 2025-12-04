@@ -23,6 +23,10 @@ contract AMM is ReentrancyGuard, Ownable {
     // Global default fee in basis points (e.g., 30 = 0.30%)
     uint16 public immutable defaultFeeBps;
 
+    // Minimum liquidity to lock forever on first pool creation
+    // This prevents pool drainage attacks by ensuring some liquidity always remains
+    uint256 private constant MINIMUM_LIQUIDITY = 1000;
+
     event PoolCreated(
         bytes32 indexed poolId,
         address indexed token0,
