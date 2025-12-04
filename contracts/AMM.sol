@@ -147,11 +147,13 @@ contract AMM is ReentrancyGuard, Ownable {
         _safeTransferFrom(token0, msg.sender, address(this), amount0);
         _safeTransferFrom(token1, msg.sender, address(this), amount1);
 
+        // Calculate liquidity using constant product formula: sqrt(x * y)
         liquidity = _sqrt(amount0 * amount1);
         require(liquidity > MINIMUM_LIQUIDITY, "insufficient liquidity");
 
-        // Lock MINIMUM_LIQUIDITY forever by sending to address(0)
-        // This prevents the last LP from draining the pool completely
+        // Lock MINIMUM_LIQUIDITY forever by assigning to address(0)
+        // This prevents the last LP from draining the pool completely.
+        // Formula: userLiquidity = sqrt(x * y) - MINIMUM_LIQUIDITY
         uint256 lockedLiquidity = MINIMUM_LIQUIDITY;
         uint256 userLiquidity = liquidity - lockedLiquidity;
 
