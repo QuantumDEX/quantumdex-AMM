@@ -508,4 +508,34 @@ describe("AMM", async () => {
       );
     }
   });
+
+  it("ensures locked liquidity remains constant after removals", async () => {
+    if (!poolId) {
+      const events = await publicClient.getContractEvents({
+        address: amm.address,
+        abi: amm.abi,
+        eventName: "PoolCreated",
+        fromBlock: 0n,
+        strict: true,
+      });
+      poolId = (events[0] as any).args.poolId as `0x${string}`;
+    }
+
+    // Get initial locked balance
+    const initialLocked = await amm.read.getLpBalance([poolId, "0x0000000000000000000000000000000000000000"]);
+    assert.equal(initialLocked, 1000n, "Initial locked liquidity should be 1000");
+
+    const lpBalance = await amm.read.getLpBalance([poolId, deployer.account.address]);
+    if (lpBalance > 1000n) {
+      const removeAmount = lpBalance - 1000n - 100n; // Leave some buffer
+      const removeRes = await amm.write.removeLiquidity([poolId, removeAmount], {
+        account: deployer.account
+      });
+      await publicClient.getTransactionReceipt({ hash: removeRes });
+
+      // Verify locked liquidity is unchanged
+      const lockedAfter = await amm.read.getLpBalance([poolId, "0x0000000000000000000000000000000000000000"]);
+      assert.equal(lockedAfter, 1000n, "Locked liquidity should remain constant");
+    }
+  });
 });
