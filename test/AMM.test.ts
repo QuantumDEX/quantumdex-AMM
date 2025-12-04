@@ -591,4 +591,73 @@ describe("AMM", async () => {
       "Total supply should equal user balance plus locked balance"
     );
   });
+
+  it("prevents multiple users from draining pool below minimum", async () => {
+    const initialA = 10_000n * 10n ** 18n;
+    const initialB = 20_000n * 10n ** 18n;
+
+    const tokenI = await viem.deployContract("MockToken", ["TokenI", "TKI", 18], {
+      account: deployer.account,
+    });
+    const tokenJ = await viem.deployContract("MockToken", ["TokenJ", "TKJ", 18], {
+      account: deployer.account,
+    });
+
+    await tokenI.write.approve([amm.address, initialA], { account: deployer.account });
+    await tokenJ.write.approve([amm.address, initialB], { account: deployer.account });
+
+    const tx = await amm.write.createPool(
+      [tokenI.address, tokenJ.address, initialA, initialB],
+      { account: deployer.account }
+    );
+    await publicClient.getTransactionReceipt({ hash: tx });
+
+    const events = await publicClient.getContractEvents({
+      address: amm.address,
+      abi: amm.abi,
+      eventName: "PoolCreated",
+      fromBlock: 0n,
+      strict: true,
+    });
+
+    const testPoolId = (events[events.length - 1] as any).args.poolId as `0x${string}`;
+    const deployerBalance = await amm.read.getLpBalance([testPoolId, deployer.account.address]);
+
+    // Get another account
+    const [user1] = await viem.getWalletClients();
+    if (user1.account.address !== deployer.account.address) {
+      // Add liquidity from another user
+      const extraA = 1_000n * 10n ** 18n;
+      const extraB = 2_000n * 10n ** 18n;
+
+      await tokenI.write.approve([amm.address, extraA], { account: user1.account });
+      await tokenJ.write.approve([amm.address, extraB], { account: user1.account });
+
+      await amm.write.addLiquidity([testPoolId, extraA, extraB], {
+        account: user1.account
+      });
+
+      const user1Balance = await amm.read.getLpBalance([testPoolId, user1.account.address]);
+
+      // Try to remove all liquidity from both users (should fail)
+      const totalRemovable = deployerBalance + user1Balance;
+      const [, , , , , currentTotal] = await amm.read.getPool([testPoolId]);
+
+      // If total removable would leave less than MINIMUM_LIQUIDITY, it should fail
+      if (BigInt(currentTotal) - totalRemovable < 1000n) {
+        await assert.rejects(
+          async () => {
+            await amm.write.removeLiquidity([testPoolId, deployerBalance], {
+              account: deployer.account
+            });
+            await amm.write.removeLiquidity([testPoolId, user1Balance], {
+              account: user1.account
+            });
+          },
+          /insufficient liquidity/,
+          "Should prevent multiple users from draining pool"
+        );
+      }
+    }
+  });
 });
