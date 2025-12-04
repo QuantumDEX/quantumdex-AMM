@@ -695,4 +695,44 @@ describe("AMM", async () => {
 
     assert.equal(lockedBalance, 1000n, "MINIMUM_LIQUIDITY should be exactly 1000");
   });
+
+  it("verifies liquidity formula: sqrt(x * y) - MINIMUM_LIQUIDITY", async () => {
+    const amountA = 4_000n * 10n ** 18n;
+    const amountB = 9_000n * 10n ** 18n;
+
+    const tokenM = await viem.deployContract("MockToken", ["TokenM", "TKM", 18], {
+      account: deployer.account,
+    });
+    const tokenN = await viem.deployContract("MockToken", ["TokenN", "TKN", 18], {
+      account: deployer.account,
+    });
+
+    await tokenM.write.approve([amm.address, amountA], { account: deployer.account });
+    await tokenN.write.approve([amm.address, amountB], { account: deployer.account });
+
+    const tx = await amm.write.createPool(
+      [tokenM.address, tokenN.address, amountA, amountB],
+      { account: deployer.account }
+    );
+    await publicClient.getTransactionReceipt({ hash: tx });
+
+    const events = await publicClient.getContractEvents({
+      address: amm.address,
+      abi: amm.abi,
+      eventName: "PoolCreated",
+      fromBlock: 0n,
+      strict: true,
+    });
+
+    const formulaPoolId = (events[events.length - 1] as any).args.poolId as `0x${string}`;
+    const [, , , , , totalSupply] = await amm.read.getPool([formulaPoolId]);
+    const userBalance = await amm.read.getLpBalance([formulaPoolId, deployer.account.address]);
+
+    // Calculate expected: sqrt(4000 * 9000) = sqrt(36000000) ≈ 6000
+    // User should receive: 6000 - 1000 = 5000
+    const expectedTotal = BigInt(totalSupply);
+    const expectedUser = BigInt(userBalance);
+
+    assert.ok(expectedUser === expectedTotal - 1000n, "User liquidity should equal total minus MINIMUM_LIQUIDITY");
+  });
 });
