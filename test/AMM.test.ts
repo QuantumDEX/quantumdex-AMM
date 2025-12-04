@@ -70,9 +70,13 @@ describe("AMM", async () => {
     assert.ok(expectedTokens.includes((token1 as string).toLowerCase()), "Token1 should be either tokenA or tokenB");
     assert.notEqual((token0 as string).toLowerCase(), (token1 as string).toLowerCase(), "Token0 and Token1 should be distinct");
 
-    // LP balance should equal totalSupply for deployer
+    // LP balance should be less than totalSupply due to locked MINIMUM_LIQUIDITY
     const lpBalance = await amm.read.getLpBalance([poolId, deployer.account.address]);
-    assert.equal(lpBalance, totalSupply, "LP balance should equal total supply");
+    assert.ok(BigInt(lpBalance) < BigInt(totalSupply), "LP balance should be less than total supply due to locked liquidity");
+    
+    // Verify MINIMUM_LIQUIDITY is locked to address(0)
+    const lockedBalance = await amm.read.getLpBalance([poolId, "0x0000000000000000000000000000000000000000"]);
+    assert.equal(lockedBalance, 1000n, "MINIMUM_LIQUIDITY should be locked to address(0)");
 
     // Reserves should match initial deposits (modulo ordering)
     assert.equal(reserve0 + reserve1, initialA + initialB, "Total reserves should match deposits");
