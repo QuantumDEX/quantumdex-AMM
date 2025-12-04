@@ -155,6 +155,8 @@ contract AMM is ReentrancyGuard, Ownable {
 
         // Calculate liquidity using constant product formula: sqrt(x * y)
         liquidity = _sqrt(amount0 * amount1);
+        // Use strict greater than to ensure we can subtract MINIMUM_LIQUIDITY
+        // If liquidity equals MINIMUM_LIQUIDITY, user would receive 0, which is invalid
         require(liquidity > MINIMUM_LIQUIDITY, "insufficient liquidity");
 
         // Lock MINIMUM_LIQUIDITY forever by assigning to address(0)
