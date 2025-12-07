@@ -126,17 +126,22 @@ contract AMM is ReentrancyGuard, Ownable {
     /// @param tokenB Second token address
     /// @param amountA Amount of tokenA to provide
     /// @param amountB Amount of tokenB to provide
+    /// @param feeBps Optional custom fee in basis points (1-1000). If 0, uses defaultFeeBps.
     /// @return poolId The unique identifier for the pool
     /// @return liquidity The amount of liquidity tokens minted (excluding locked portion)
     function createPool(
         address tokenA,
         address tokenB,
         uint256 amountA,
-        uint256 amountB
+        uint256 amountB,
+        uint16 feeBps
     ) external nonReentrant returns (bytes32 poolId, uint256 liquidity) {
         require(amountA > 0 && amountB > 0, "insufficient amounts");
 
-        uint16 feeBps = defaultFeeBps;
+        // Use provided feeBps if non-zero, otherwise use defaultFeeBps
+        if (feeBps == 0) {
+            feeBps = defaultFeeBps;
+        }
         require(tokenA != tokenB, "identical tokens");
         require(tokenA != address(0) && tokenB != address(0), "zero address");
 
