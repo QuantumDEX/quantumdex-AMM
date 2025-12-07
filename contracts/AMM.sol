@@ -388,8 +388,31 @@ contract AMM is ReentrancyGuard, Ownable {
         uint256 minAmountOut,
         address recipient
     ) external payable nonReentrant returns (uint256 amountOut) {
-        // TODO: Implement multi-hop swap logic
+        // Path validation: must have at least 3 elements (tokenIn, poolId, tokenOut)
+        // For n hops, path length = 2n + 1 (tokens) + n (poolIds) = 3n + 1
+        // Minimum: 1 hop = 3 elements
+        if (path.length < 3) {
+            revert InvalidPathLength();
+        }
+        // Path length must be odd (token, poolId, token, poolId, ...)
+        if (path.length % 2 == 0) {
+            revert InvalidPath();
+        }
+        
+        // TODO: Implement sequential swap execution
         revert("Not implemented");
+    }
+
+    /// @notice Validate multi-hop swap path format
+    /// @dev Path must alternate: token, poolId, token, poolId, ...
+    /// @param path Array to validate
+    /// @return isValid True if path format is valid
+    function _validatePath(address[] calldata path) internal pure returns (bool isValid) {
+        // Path must have at least 3 elements and be odd length
+        if (path.length < 3 || path.length % 2 == 0) {
+            return false;
+        }
+        return true;
     }
 
     function _getAmountOut(
