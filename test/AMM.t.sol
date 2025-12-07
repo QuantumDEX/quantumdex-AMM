@@ -30,7 +30,8 @@ contract AMMTest is Test {
             address(tokenA),
             address(tokenB),
             amountA,
-            amountB
+            amountB,
+            0 // Use default fee
         );
 
         // Get pool info
@@ -55,7 +56,7 @@ contract AMMTest is Test {
         tokenB.approve(address(amm), smallB);
 
         vm.expectRevert("insufficient liquidity");
-        amm.createPool(address(tokenA), address(tokenB), smallA, smallB);
+        amm.createPool(address(tokenA), address(tokenB), smallA, smallB, 0);
     }
 
     function test_RevertIfLiquidityEqualsMinimum() public {
@@ -70,7 +71,7 @@ contract AMMTest is Test {
         // This might pass if sqrt gives slightly more than 1000, so let's test with exact 1000
         // Actually, sqrt(1000e18 * 1000e18) = 1000e18, which equals MINIMUM_LIQUIDITY
         // So it should revert. But if it doesn't, the sqrt might be rounding up slightly
-        try amm.createPool(address(tokenA), address(tokenB), amount, amount) {
+        try amm.createPool(address(tokenA), address(tokenB), amount, amount, 0) {
             // If it doesn't revert, check that liquidity is actually > 1000
             bytes32 poolId = amm.getPoolId(address(tokenA), address(tokenB), FEE_BPS);
             (,,, , , uint256 totalSupply) = amm.getPool(poolId);
@@ -91,7 +92,8 @@ contract AMMTest is Test {
             address(tokenA),
             address(tokenB),
             amountA,
-            amountB
+            amountB,
+            0 // Use default fee
         );
 
         (,,, , , uint256 totalSupply) = amm.getPool(poolId);
@@ -123,7 +125,8 @@ contract AMMTest is Test {
             address(tokenA),
             address(tokenB),
             amountA,
-            amountB
+            amountB,
+            0 // Use default fee
         );
 
         (,,, , , uint256 totalSupply) = amm.getPool(poolId);
@@ -158,7 +161,8 @@ contract AMMTest is Test {
             address(tokenA),
             address(tokenB),
             amountA,
-            amountB
+            amountB,
+            0 // Use default fee
         );
 
         uint256 initialLocked = amm.getLpBalance(poolId, address(0));
@@ -187,7 +191,8 @@ contract AMMTest is Test {
             address(tokenA),
             address(tokenB),
             amountA,
-            amountB
+            amountB,
+            0 // Use default fee
         );
 
         uint256 lpBalance = amm.getLpBalance(poolId, address(this));
@@ -223,7 +228,8 @@ contract AMMTest is Test {
             address(tokenA),
             address(tokenB),
             amountA,
-            amountB
+            amountB,
+            0 // Use default fee
         );
 
         uint256 userBalance = amm.getLpBalance(poolId, address(this));
@@ -272,7 +278,8 @@ contract AMMTest is Test {
             address(tokenA),
             address(tokenB),
             amountA,
-            amountB
+            amountB,
+            0 // Use default fee
         );
 
         uint256 lockedBalance = amm.getLpBalance(poolId, address(0));
