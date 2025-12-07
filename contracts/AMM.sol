@@ -409,6 +409,15 @@ contract AMM is ReentrancyGuard, Ownable {
         uint256 numHops = (path.length - 1) / 2;
         uint256 currentAmount = amountIn;
         
+        // Handle initial token transfer (only for first hop)
+        address firstToken = path[0];
+        if (firstToken == ETH) {
+            require(msg.value == amountIn, "ETH amount mismatch");
+        } else {
+            require(msg.value == 0, "unexpected ETH");
+            _safeTransferFrom(firstToken, msg.sender, address(this), amountIn);
+        }
+        
         // Execute swaps sequentially
         for (uint256 i = 0; i < numHops; i++) {
             uint256 tokenInIndex = i * 2;
@@ -420,11 +429,16 @@ contract AMM is ReentrancyGuard, Ownable {
             address tokenOut = path[tokenOutIndex];
             
             // Execute single hop swap
+            // For intermediate hops, recipient is this contract (tokens stay in contract)
+            // For final hop, recipient is the final recipient
             currentAmount = _executeHop(poolId, tokenIn, tokenOut, currentAmount, i == numHops - 1 ? recipient : address(this));
         }
         
         amountOut = currentAmount;
         require(amountOut >= minAmountOut, "slippage");
+        
+        // Emit MultiHopSwap event
+        emit MultiHopSwap(msg.sender, path[0], path[path.length - 1], amountIn, amountOut, recipient);
     }
 
     /// @notice Validate multi-hop swap path format
