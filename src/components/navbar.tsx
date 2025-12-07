@@ -10,6 +10,7 @@ import { useAccount, useChainId, useDisconnect } from "wagmi";
 
 import { shortenAddress } from "@/lib/utils";
 import { networks } from "@/config/wagmi";
+import { Logo } from "@/components/logo";
 
 const NAV_LINKS = [
   { href: "/", label: "Overview" },
@@ -38,9 +39,7 @@ export const Navbar = () => {
   return (
     <header className="sticky top-0 z-50 border-b border-purple-200/70 bg-white/75 backdrop-blur-md transition dark:border-purple-800/60 dark:bg-black/60">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-6 px-6 py-4">
-        <Link href="/" className="text-lg font-semibold tracking-tight text-purple-600 transition hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300">
-          QuantumDEX
-        </Link>
+        <Logo variant="full" />
 
         <nav className="hidden items-center gap-2 md:flex">
           {NAV_LINKS.map((link) => {

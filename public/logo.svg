@@ -1,0 +1,14 @@
+<svg width="120" height="32" viewBox="0 0 120 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Atom Icon -->
+  <g transform="translate(0, 4)">
+    <circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.8"/>
+    <ellipse cx="12" cy="12" rx="8" ry="4" stroke="currentColor" stroke-width="2" fill="none"/>
+    <ellipse cx="12" cy="12" rx="8" ry="4" stroke="currentColor" stroke-width="2" fill="none" transform="rotate(60 12 12)"/>
+    <ellipse cx="12" cy="12" rx="8" ry="4" stroke="currentColor" stroke-width="2" fill="none" transform="rotate(-60 12 12)"/>
+    <!-- Swap Arrows -->
+    <path d="M8 14 L6 12 L8 10 M16 14 L18 12 L16 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <!-- Text -->
+  <text x="28" y="20" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="currentColor">QuantumDEX</text>
+</svg>
+

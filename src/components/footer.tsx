@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Logo } from "@/components/logo";
 
 const footerLinks = {
   product: [
@@ -29,9 +30,7 @@ export const Footer = () => {
         <div className="grid gap-8 md:grid-cols-4">
           {/* Brand */}
           <div className="space-y-4">
-            <Link href="/" className="text-xl font-bold tracking-tight text-purple-600 transition hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300">
-              QuantumDEX
-            </Link>
+            <Logo variant="full" />
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               Decentralized exchange and token streaming platform built for the future of DeFi.
             </p>
