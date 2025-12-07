@@ -403,8 +403,28 @@ contract AMM is ReentrancyGuard, Ownable {
             revert("zero recipient");
         }
         
-        // TODO: Implement sequential swap execution
-        revert("Not implemented");
+        // Calculate number of hops: (path.length - 1) / 2
+        // Path: [token0, poolId1, token1, poolId2, token2]
+        // Hops: 2 (token0->token1 via poolId1, token1->token2 via poolId2)
+        uint256 numHops = (path.length - 1) / 2;
+        uint256 currentAmount = amountIn;
+        
+        // Execute swaps sequentially
+        for (uint256 i = 0; i < numHops; i++) {
+            uint256 tokenInIndex = i * 2;
+            uint256 poolIdIndex = tokenInIndex + 1;
+            uint256 tokenOutIndex = tokenInIndex + 2;
+            
+            address tokenIn = path[tokenInIndex];
+            bytes32 poolId = bytes32(uint256(uint160(path[poolIdIndex])));
+            address tokenOut = path[tokenOutIndex];
+            
+            // Execute single hop swap
+            currentAmount = _executeHop(poolId, tokenIn, tokenOut, currentAmount, i == numHops - 1 ? recipient : address(this));
+        }
+        
+        amountOut = currentAmount;
+        require(amountOut >= minAmountOut, "slippage");
     }
 
     /// @notice Validate multi-hop swap path format
