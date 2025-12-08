@@ -1246,7 +1246,7 @@ describe("AMM Tests", function () {
 
       await expect(
         amm.swapMultiHop(path, poolIds, swapAmount, 0, deployer.address)
-      ).to.be.revertedWithCustomError(amm, "PoolNotFound");
+      ).to.be.revertedWithCustomError(amm, "InvalidPool");
     });
 
     it("Should reject invalid token path in pool", async function () {
