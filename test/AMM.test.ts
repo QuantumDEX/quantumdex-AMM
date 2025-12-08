@@ -1184,7 +1184,7 @@ describe("AMM Tests", function () {
       const unrealisticMin = ethers.parseUnits("10000", 18);
       await expect(
         amm.swapMultiHop(path, poolIds, swapAmount, unrealisticMin, deployer.address)
-      ).to.be.revertedWith("slippage");
+      ).to.be.revertedWithCustomError(amm, "SlippageExceeded");
     });
 
     it("Should reject invalid path length", async function () {
@@ -1192,7 +1192,7 @@ describe("AMM Tests", function () {
 
       await expect(
         amm.swapMultiHop([await tokenA.getAddress()], [], 1000, 0, deployer.address)
-      ).to.be.revertedWith("invalid path");
+      ).to.be.revertedWithCustomError(amm, "InvalidPath");
     });
 
     it("Should reject mismatched poolIds length", async function () {
@@ -1203,7 +1203,7 @@ describe("AMM Tests", function () {
 
       await expect(
         amm.swapMultiHop(path, poolIds, 1000, 0, deployer.address)
-      ).to.be.revertedWith("invalid poolIds length");
+      ).to.be.revertedWithCustomError(amm, "InvalidPathLength");
     });
 
     it("Should reject invalid pool in path", async function () {
@@ -1234,7 +1234,7 @@ describe("AMM Tests", function () {
 
       await expect(
         amm.swapMultiHop(path, poolIds, swapAmount, 0, deployer.address)
-      ).to.be.revertedWith("pool not found");
+      ).to.be.revertedWithCustomError(amm, "PoolNotFound");
     });
 
     it("Should reject invalid token path in pool", async function () {
@@ -1269,7 +1269,7 @@ describe("AMM Tests", function () {
 
       await expect(
         amm.swapMultiHop(path, poolIds, swapAmount, 0, deployer.address)
-      ).to.be.revertedWith("invalid path");
+      ).to.be.revertedWithCustomError(amm, "InvalidPath");
     });
   });
 
@@ -1403,7 +1403,7 @@ describe("AMM Tests", function () {
 
       await expect(
         receiver.executeFlashLoan(fakePoolId, await tokenA.getAddress(), flashLoanAmount, "0x")
-      ).to.be.revertedWith("pool not found");
+      ).to.be.revertedWithCustomError(amm, "PoolNotFound");
     });
 
     it("Should revert if token is not part of pool", async function () {
@@ -1418,7 +1418,7 @@ describe("AMM Tests", function () {
 
       await expect(
         receiver.executeFlashLoan(poolId, await tokenC.getAddress(), flashLoanAmount, "0x")
-      ).to.be.revertedWith("invalid token");
+      ).to.be.revertedWithCustomError(amm, "InvalidToken");
     });
 
     it("Should revert if amount is zero", async function () {
@@ -1426,7 +1426,7 @@ describe("AMM Tests", function () {
 
       await expect(
         receiver.executeFlashLoan(poolId, await tokenA.getAddress(), 0, "0x")
-      ).to.be.revertedWith("zero amount");
+      ).to.be.revertedWithCustomError(amm, "ZeroAmount");
     });
 
     it("Should revert if pool has insufficient liquidity", async function () {
@@ -1438,7 +1438,7 @@ describe("AMM Tests", function () {
 
       await expect(
         receiver.executeFlashLoan(poolId, await tokenA.getAddress(), excessiveAmount, "0x")
-      ).to.be.revertedWith("insufficient liquidity");
+      ).to.be.revertedWithCustomError(amm, "InsufficientLiquidityForFlashLoan");
     });
 
     it("Should support flash loan for token1", async function () {
