@@ -1338,9 +1338,11 @@ describe("AMM Tests", function () {
         expect(poolAfter.reserve1).to.equal(poolBefore.reserve1 + repayAmount);
       }
 
-      // Verify receiver balance decreased by repay amount
+      // Verify receiver balance: should have flash loan amount left after repaying
+      // Receiver started with repayAmount, received flashLoanAmount, then repaid repayAmount
+      // Final balance = repayAmount + flashLoanAmount - repayAmount = flashLoanAmount
       const receiverBalanceAfter = await tokenA.balanceOf(await receiver.getAddress());
-      expect(receiverBalanceAfter).to.equal(receiverBalanceBefore - repayAmount);
+      expect(receiverBalanceAfter).to.equal(flashLoanAmount);
     });
 
     it("Should calculate flash loan fee correctly (9 bps)", async function () {
