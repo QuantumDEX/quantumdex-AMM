@@ -446,13 +446,13 @@ contract AMM is ReentrancyGuard, Ownable {
         uint256 amount,
         bytes calldata data
     ) external nonReentrant {
-        require(amount > 0, "zero amount");
+        if (amount == 0) revert ZeroAmount();
         
         Pool storage pool = pools[poolId];
-        require(pool.exists, "pool not found");
+        if (!pool.exists) revert PoolNotFound();
         
         // Verify token is part of the pool
-        require(token == pool.token0 || token == pool.token1, "invalid token");
+        if (token != pool.token0 && token != pool.token1) revert InvalidToken();
         
         // Calculate fee (9 bps = 0.09%)
         uint256 fee = (amount * FLASH_LOAN_FEE_BPS) / 10000;
@@ -463,9 +463,9 @@ contract AMM is ReentrancyGuard, Ownable {
         
         // Verify pool has sufficient liquidity
         if (token == pool.token0) {
-            require(uint256(pool.reserve0) >= amount, "insufficient liquidity");
+            if (uint256(pool.reserve0) < amount) revert InsufficientLiquidityForFlashLoan();
         } else {
-            require(uint256(pool.reserve1) >= amount, "insufficient liquidity");
+            if (uint256(pool.reserve1) < amount) revert InsufficientLiquidityForFlashLoan();
         }
         
         // Transfer tokens to borrower
@@ -533,31 +533,31 @@ contract AMM is ReentrancyGuard, Ownable {
         address recipient
     ) external payable nonReentrant returns (uint256 amountOut) {
         // Validate path and poolIds
-        require(path.length >= 2, "invalid path");
-        require(poolIds.length == path.length - 1, "invalid poolIds length");
+        if (path.length < 2) revert InvalidPath();
+        if (poolIds.length != path.length - 1) revert InvalidPathLength();
         
         // Validate input amount
         if (amountIn == 0) {
-            revert("zero input");
+            revert ZeroInput();
         }
         
         // Validate recipient
         if (recipient == address(0)) {
-            revert("zero recipient");
+            revert ZeroRecipient();
         }
         
         // Calculate number of hops
         uint256 numHops = poolIds.length;
-        require(numHops > 0, "invalid path");
-        require(numHops <= 10, "too many hops"); // Gas limit protection (max 10 hops)
+        if (numHops == 0) revert InvalidPath();
+        if (numHops > 10) revert InvalidPathLength(); // Gas limit protection (max 10 hops)
         uint256 currentAmount = amountIn;
         
         // Handle initial token transfer (only for first hop)
         address firstToken = path[0];
         if (firstToken == ETH) {
-            require(msg.value == amountIn, "ETH amount mismatch");
+            if (msg.value != amountIn) revert ETHAmountMismatch();
         } else {
-            require(msg.value == 0, "unexpected ETH");
+            if (msg.value != 0) revert UnexpectedETH();
             _safeTransferFrom(firstToken, msg.sender, address(this), amountIn);
         }
         
@@ -574,10 +574,10 @@ contract AMM is ReentrancyGuard, Ownable {
         }
         
         amountOut = currentAmount;
-        require(amountOut >= minAmountOut, "slippage");
+        if (amountOut < minAmountOut) revert SlippageExceeded();
         
         // Validate final output is non-zero
-        require(amountOut > 0, "zero output");
+        if (amountOut == 0) revert ZeroOutput();
         
         // Emit MultiHopSwap event
         emit MultiHopSwap(msg.sender, path[0], path[path.length - 1], path, poolIds, amountIn, amountOut, recipient);
@@ -628,7 +628,7 @@ contract AMM is ReentrancyGuard, Ownable {
         
         // Get reserves and validate
         (uint112 reserve0, uint112 reserve1) = (pool.reserve0, pool.reserve1);
-        require(reserve0 > 0 && reserve1 > 0, "no reserves");
+        if (reserve0 == 0 || reserve1 == 0) revert NoReserves();
         
         // Calculate amount out with fee
         uint256 amountInWithFee = (amountIn * (10000 - pool.feeBps)) / 10000;
@@ -726,8 +726,8 @@ contract AMM is ReentrancyGuard, Ownable {
         uint112 reserveIn,
         uint112 reserveOut
     ) internal pure returns (uint256 amountOut) {
-        require(amountIn > 0, "insufficient input");
-        require(reserveIn > 0 && reserveOut > 0, "insufficient liquidity");
+        if (amountIn == 0) revert ZeroInput();
+        if (reserveIn == 0 || reserveOut == 0) revert NoReserves();
         uint256 numerator = uint256(amountIn) * reserveOut;
         uint256 denominator = uint256(reserveIn) + amountIn;
         amountOut = numerator / denominator;
@@ -753,9 +753,9 @@ contract AMM is ReentrancyGuard, Ownable {
     function _safeTransfer(address token, address to, uint256 value) internal {
         if (token == ETH) {
             (bool success, ) = payable(to).call{value: value}("");
-            require(success, "ETH transfer failed");
+            if (!success) revert TransferFailed();
         } else {
-            require(IERC20(token).transfer(to, value), "transfer failed");
+            if (!IERC20(token).transfer(to, value)) revert TransferFailed();
         }
     }
 
@@ -763,9 +763,9 @@ contract AMM is ReentrancyGuard, Ownable {
         if (token == ETH) {
             // For ETH, the value should already be in the contract via msg.value
             // We just need to verify the contract has enough balance
-            require(address(this).balance >= value, "insufficient ETH balance");
+            if (address(this).balance < value) revert InsufficientETHBalance();
         } else {
-            require(IERC20(token).transferFrom(from, to, value), "transferFrom failed");
+            if (!IERC20(token).transferFrom(from, to, value)) revert TransferFailed();
         }
     }
 }
