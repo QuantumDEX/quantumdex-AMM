@@ -453,8 +453,11 @@ contract AMM is ReentrancyGuard, Ownable {
         IFlashLoanReceiver(msg.sender).onFlashLoan(token, amount, fee, data);
         
         // Verify repayment + fee
+        // We sent out 'amount', so we should receive back 'amount + fee'
+        // Net change: -amount + (amount + fee) = +fee
+        // Final balance should be: balanceBefore + fee
         uint256 balanceAfter = _getBalance(token);
-        if (balanceAfter < balanceBefore + repayAmount) {
+        if (balanceAfter < balanceBefore + fee) {
             revert FlashLoanNotRepaid();
         }
         
