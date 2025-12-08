@@ -61,13 +61,35 @@ contract AMM is ReentrancyGuard, Ownable {
     /// @dev Standard flash loan fee rate used by major protocols
     uint16 private constant FLASH_LOAN_FEE_BPS = 9;
 
-    // Custom errors for multi-hop swaps
+    // Custom errors for gas optimization (replaces require strings)
+    error FeeTooHigh();
+    error PoolNotFound();
+    error IdenticalTokens();
+    error BothETH();
+    error InsufficientAmounts();
+    error InvalidFee();
+    error ETHAmountMismatch();
+    error PoolExists();
+    error InsufficientLiquidity();
+    error ZeroInput();
+    error ZeroRecipient();
+    error InvalidTokenIn();
+    error UnexpectedETH();
+    error NoReserves();
+    error SlippageExceeded();
+    error ZeroLiquidity();
+    error InsufficientLpBalance();
+    error InsufficientAmountsOut();
+    error ZeroAmount();
+    error InvalidToken();
+    error InsufficientLiquidityForFlashLoan();
     error InvalidPath();
     error InvalidPathLength();
     error InvalidPool();
-    error SlippageExceeded();
-
-    // Custom errors for flash loans
+    error ZeroOutput();
+    error TransferFailed();
+    error InsufficientETHBalance();
+    // Flash loan errors
     error FlashLoanNotRepaid();
     error FlashLoanInsufficientBalance();
     error FlashLoanInvalidReceiver();
@@ -128,7 +150,7 @@ contract AMM is ReentrancyGuard, Ownable {
     );
 
     constructor(uint16 _defaultFeeBps) Ownable(msg.sender) {
-        require(_defaultFeeBps <= 1000, "fee too high");
+        if (_defaultFeeBps > 1000) revert FeeTooHigh();
         defaultFeeBps = _defaultFeeBps;
     }
 
@@ -143,7 +165,7 @@ contract AMM is ReentrancyGuard, Ownable {
         uint256 totalSupply
     ) {
         Pool storage pool = pools[poolId];
-        require(pool.exists, "pool not found");
+        if (!pool.exists) revert PoolNotFound();
         return (
             pool.token0,
             pool.token1,
@@ -156,7 +178,7 @@ contract AMM is ReentrancyGuard, Ownable {
 
     function getLpBalance(bytes32 poolId, address account) external view returns (uint256) {
         Pool storage pool = pools[poolId];
-        require(pool.exists, "pool not found");
+        if (!pool.exists) revert PoolNotFound();
         return pool.balanceOf[account];
     }
 
@@ -165,9 +187,9 @@ contract AMM is ReentrancyGuard, Ownable {
         address tokenB,
         uint16 feeBps
     ) public pure returns (bytes32 poolId) {
-        require(tokenA != tokenB, "identical tokens");
+        if (tokenA == tokenB) revert IdenticalTokens();
         // Allow address(0) for ETH, but both cannot be ETH
-        require(!(tokenA == ETH && tokenB == ETH), "both ETH");
+        if (tokenA == ETH && tokenB == ETH) revert BothETH();
         (address token0, address token1) = tokenA < tokenB
             ? (tokenA, tokenB)
             : (tokenB, tokenA);
@@ -192,23 +214,23 @@ contract AMM is ReentrancyGuard, Ownable {
         uint256 amountB,
         uint16 feeBps
     ) external payable nonReentrant returns (bytes32 poolId, uint256 liquidity) {
-        require(amountA > 0 && amountB > 0, "insufficient amounts");
+        if (amountA == 0 || amountB == 0) revert InsufficientAmounts();
 
         // Use provided feeBps if non-zero, otherwise use defaultFeeBps
         if (feeBps == 0) {
             feeBps = defaultFeeBps;
         }
         // Validate fee is within acceptable range (1-1000 basis points)
-        require(feeBps > 0 && feeBps <= 1000, "invalid fee");
+        if (feeBps == 0 || feeBps > 1000) revert InvalidFee();
         // Allow address(0) for ETH, but both cannot be ETH (check before identical tokens)
-        require(!(tokenA == ETH && tokenB == ETH), "both ETH");
-        require(tokenA != tokenB, "identical tokens");
+        if (tokenA == ETH && tokenB == ETH) revert BothETH();
+        if (tokenA == tokenB) revert IdenticalTokens();
 
         // Validate ETH amount matches msg.value
         uint256 expectedEth = 0;
         if (tokenA == ETH) expectedEth += amountA;
         if (tokenB == ETH) expectedEth += amountB;
-        require(msg.value == expectedEth, "ETH amount mismatch");
+        if (msg.value != expectedEth) revert ETHAmountMismatch();
 
         (address token0, address token1) = tokenA < tokenB
             ? (tokenA, tokenB)
@@ -220,7 +242,7 @@ contract AMM is ReentrancyGuard, Ownable {
 
         poolId = keccak256(abi.encodePacked(token0, token1, feeBps));
         Pool storage pool = pools[poolId];
-        require(!pool.exists, "pool exists");
+        if (pool.exists) revert PoolExists();
 
         _safeTransferFrom(token0, msg.sender, address(this), amount0);
         _safeTransferFrom(token1, msg.sender, address(this), amount1);
@@ -229,7 +251,7 @@ contract AMM is ReentrancyGuard, Ownable {
         liquidity = _sqrt(amount0 * amount1);
         // Use strict greater than to ensure we can subtract MINIMUM_LIQUIDITY
         // If liquidity equals MINIMUM_LIQUIDITY, user would receive 0, which is invalid
-        require(liquidity > MINIMUM_LIQUIDITY, "insufficient liquidity");
+        if (liquidity <= MINIMUM_LIQUIDITY) revert InsufficientLiquidity();
 
         // Lock MINIMUM_LIQUIDITY forever by assigning to address(0)
         // This prevents the last LP from draining the pool completely.
