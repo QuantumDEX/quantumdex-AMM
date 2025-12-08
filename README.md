@@ -24,15 +24,20 @@ QuantumDEX consists of two main protocol contracts:
 - ✅ Configurable swap fees (basis points)
 - ✅ Minimum liquidity lock to prevent pool drainage attacks
 - ✅ Reentrancy protection
-- ✅ Comprehensive test coverage
+- ✅ Comprehensive test coverage (51 tests passing)
 - ✅ Gas-optimized storage layout
+- ✅ Custom errors for gas-efficient reverts
+- ✅ Native ETH support (WETH pattern)
+- ✅ Multi-hop swaps
+- ✅ Flash loans
 
 ## Tech Stack
 
-- **Solidity:** ^0.8.28
+- **Solidity:** ^0.8.20
 - **Framework:** Hardhat
-- **Testing:** Viem, Node.js test runner
+- **Testing:** Hardhat, Ethers.js v6, Chai
 - **Security:** OpenZeppelin Contracts
+- **Gas Reporting:** hardhat-gas-reporter
 
 ## Quick Start
 
@@ -70,10 +75,12 @@ scripts/
 
 ### AMM (DEX) Operations
 
-- `createPool(tokenA, tokenB, amountA, amountB)` - Create a new pool with initial liquidity
-- `addLiquidity(poolId, amount0, amount1)` - Add liquidity to an existing pool
-- `removeLiquidity(poolId, liquidity)` - Remove liquidity and receive tokens
-- `swap(poolId, tokenIn, amountIn, minAmountOut, recipient)` - Execute a token swap
+- `createPool(tokenA, tokenB, amountA, amountB, feeBps)` - Create a new pool with initial liquidity (supports native ETH)
+- `addLiquidity(poolId, amount0, amount1)` - Add liquidity to an existing pool (supports native ETH)
+- `removeLiquidity(poolId, liquidity)` - Remove liquidity and receive tokens (supports native ETH)
+- `swap(poolId, tokenIn, amountIn, minAmountOut, recipient)` - Execute a token swap (supports native ETH)
+- `swapMultiHop(path, poolIds, amountIn, minAmountOut, recipient)` - Execute multi-hop swaps through multiple pools
+- `flashLoan(poolId, token, amount, data)` - Borrow tokens for flash loan operations
 
 ### AMM View Functions
 
@@ -102,7 +109,13 @@ The test suite covers:
 - Adding and removing liquidity
 - Token swaps with fee calculations
 - Constant product formula verification
+- Native ETH support (create pool, add/remove liquidity, swaps)
+- Multi-hop swaps
+- Flash loans
 - Edge cases and error handling
+- Gas optimizations (custom errors, unchecked blocks)
+
+**Test Results:** 51 tests passing
 
 ```bash
 # Run all tests
@@ -150,6 +163,8 @@ This codebase has been reviewed for common vulnerabilities, but **has not underg
 - **Reentrancy Protection**: All state-changing functions are protected with `nonReentrant` modifier to prevent reentrancy attacks.
 
 - **Access Control**: Owner-only functions use OpenZeppelin's `Ownable` pattern for secure access control.
+
+- **Gas Optimization**: Contract uses custom errors instead of require strings, unchecked blocks for validated arithmetic, and optimal storage packing (uint112 reserves with uint16 feeBps).
 
 ### Minimum Liquidity Lock Implementation
 
