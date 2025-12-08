@@ -888,7 +888,7 @@ describe("AMM Tests", function () {
           0,
           { value: ethAmount * 2n }
         )
-      ).to.be.revertedWith("both ETH");
+      ).to.be.revertedWithCustomError(amm, "BothETH");
     });
 
     it("Should reject createPool with incorrect ETH amount", async function () {
@@ -910,7 +910,7 @@ describe("AMM Tests", function () {
           0,
           { value: ethAmount / 2n } // Wrong amount
         )
-      ).to.be.revertedWith("ETH amount mismatch");
+      ).to.be.revertedWithCustomError(amm, "ETHAmountMismatch");
     });
 
     it("Should reject addLiquidity with incorrect ETH amount", async function () {
@@ -941,7 +941,7 @@ describe("AMM Tests", function () {
           tokenAmount,
           { value: ethAmount / 2n } // Wrong amount
         )
-      ).to.be.revertedWith("ETH amount mismatch");
+      ).to.be.revertedWithCustomError(amm, "ETHAmountMismatch");
     });
 
     it("Should reject swap with incorrect ETH amount", async function () {
@@ -975,7 +975,7 @@ describe("AMM Tests", function () {
           deployer.address,
           { value: swapEthAmount / 2n } // Wrong amount
         )
-      ).to.be.revertedWith("ETH amount mismatch");
+      ).to.be.revertedWithCustomError(amm, "ETHAmountMismatch");
     });
 
     it("Should reject swap ERC20 with unexpected ETH", async function () {
@@ -1009,7 +1009,7 @@ describe("AMM Tests", function () {
           deployer.address,
           { value: ethers.parseEther("0.1") } // Unexpected ETH
         )
-      ).to.be.revertedWith("unexpected ETH");
+      ).to.be.revertedWithCustomError(amm, "UnexpectedETH");
     });
   });
 
