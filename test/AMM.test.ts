@@ -1313,9 +1313,8 @@ describe("AMM Tests", function () {
       const fee = (flashLoanAmount * BigInt(FLASH_LOAN_FEE_BPS)) / BigInt(10000);
       const repayAmount = flashLoanAmount + fee;
 
-      // Fund receiver to repay
+      // Fund receiver to repay (contract will transfer back, no approval needed)
       await tokenA.mint(await receiver.getAddress(), repayAmount);
-      await tokenA.connect(await ethers.getSigner(await receiver.getAddress())).approve(await amm.getAddress(), repayAmount);
 
       // Get initial balances
       const poolBefore = await amm.getPool(poolId);
@@ -1347,7 +1346,6 @@ describe("AMM Tests", function () {
 
       // Fund receiver
       await tokenA.mint(await receiver.getAddress(), repayAmount);
-      await tokenA.connect(await ethers.getSigner(await receiver.getAddress())).approve(await amm.getAddress(), repayAmount);
 
       await receiver.executeFlashLoan(poolId, await tokenA.getAddress(), flashLoanAmount, "0x");
 
@@ -1380,7 +1378,6 @@ describe("AMM Tests", function () {
       // Fund receiver with less than required
       const underPayment = repayAmount - BigInt(1);
       await tokenA.mint(await receiver.getAddress(), underPayment);
-      await tokenA.connect(await ethers.getSigner(await receiver.getAddress())).approve(await amm.getAddress(), underPayment);
 
       // Set custom repay amount to underpay
       await receiver.setRepayAmountOverride(underPayment);
@@ -1445,7 +1442,6 @@ describe("AMM Tests", function () {
 
       // Fund receiver
       await tokenB.mint(await receiver.getAddress(), repayAmount);
-      await tokenB.connect(await ethers.getSigner(await receiver.getAddress())).approve(await amm.getAddress(), repayAmount);
 
       const poolBefore = await amm.getPool(poolId);
 
@@ -1466,7 +1462,6 @@ describe("AMM Tests", function () {
 
       // Fund receiver
       await tokenA.mint(await receiver.getAddress(), repayAmount);
-      await tokenA.connect(await ethers.getSigner(await receiver.getAddress())).approve(await amm.getAddress(), repayAmount);
 
       await receiver.executeFlashLoan(poolId, await tokenA.getAddress(), flashLoanAmount, testData);
 
@@ -1484,7 +1479,6 @@ describe("AMM Tests", function () {
 
       // Fund receiver
       await tokenA.mint(await receiver.getAddress(), repayAmount);
-      await tokenA.connect(await ethers.getSigner(await receiver.getAddress())).approve(await amm.getAddress(), repayAmount);
 
       await expect(
         receiver.executeFlashLoan(poolId, await tokenA.getAddress(), flashLoanAmount, "0x")
