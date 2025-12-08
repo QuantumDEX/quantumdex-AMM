@@ -1328,9 +1328,15 @@ describe("AMM Tests", function () {
       expect(await receiver.lastAmount()).to.equal(flashLoanAmount);
       expect(await receiver.lastFee()).to.equal(fee);
 
-      // Verify pool reserves increased by fee
+      // Verify pool reserves increased by repayAmount
       const poolAfter = await amm.getPool(poolId);
-      expect(poolAfter.reserve0).to.equal(poolBefore.reserve0 + repayAmount);
+      // Check which reserve corresponds to tokenA
+      const tokenAAddress = await tokenA.getAddress();
+      if (poolAfter.token0.toLowerCase() === tokenAAddress.toLowerCase()) {
+        expect(poolAfter.reserve0).to.equal(poolBefore.reserve0 + repayAmount);
+      } else {
+        expect(poolAfter.reserve1).to.equal(poolBefore.reserve1 + repayAmount);
+      }
 
       // Verify receiver balance decreased by repay amount
       const receiverBalanceAfter = await tokenA.balanceOf(await receiver.getAddress());
@@ -1447,9 +1453,15 @@ describe("AMM Tests", function () {
 
       await receiver.executeFlashLoan(poolId, await tokenB.getAddress(), flashLoanAmount, "0x");
 
-      // Verify pool reserves increased by fee
+      // Verify pool reserves increased by repayAmount
       const poolAfter = await amm.getPool(poolId);
-      expect(poolAfter.reserve1).to.equal(poolBefore.reserve1 + repayAmount);
+      // Check which reserve corresponds to tokenB
+      const tokenBAddress = await tokenB.getAddress();
+      if (poolAfter.token0.toLowerCase() === tokenBAddress.toLowerCase()) {
+        expect(poolAfter.reserve0).to.equal(poolBefore.reserve0 + repayAmount);
+      } else {
+        expect(poolAfter.reserve1).to.equal(poolBefore.reserve1 + repayAmount);
+      }
     });
 
     it("Should pass data to callback", async function () {
