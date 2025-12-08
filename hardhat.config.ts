@@ -1,6 +1,7 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 import "@nomicfoundation/hardhat-chai-matchers";
+import "hardhat-gas-reporter";
 
 // If not set, it uses ours Alchemy's default API key.
 const providerApiKey = process.env.ALCHEMY_API_KEY || "oKxs-03sij-U_N0iOlrSsZFr29-IqbuF";
@@ -131,6 +132,13 @@ const config: HardhatUserConfig = {
   },
   mocha: {
     timeout: 40000,
+  },
+  gasReporter: {
+    enabled: process.env.REPORT_GAS !== undefined,
+    currency: "USD",
+    outputFile: "gas-report.txt",
+    noColors: true,
+    coinmarketcap: process.env.COINMARKETCAP_API_KEY,
   },
 };
 
