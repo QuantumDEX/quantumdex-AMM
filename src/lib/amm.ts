@@ -195,21 +195,34 @@ export async function removeLiquidity(
 }
 
 /**
- * Execute a swap via a router contract. Returns transaction receipt and any returned value.
+ * Execute a swap via the AMM contract. Returns transaction receipt and amountOut.
+ * - Uses the actual AMM contract ABI with poolId-based swaps
+ * - Automatically fetches poolId using getPoolId
  */
 export async function swap(
   signer: JsonRpcSigner,
-  routerAddress: string,
+  ammAddress: string,
   tokenIn: string,
   tokenOut: string,
   amountIn: string | number,
   minAmountOut: string | number,
-  routerAbi?: any,
+  recipient: string,
+  feeBps: number = 30, // Default 0.3% fee (30 basis points)
+  ammAbi?: any,
 ) {
-  const resolvedRouterAbi = await resolveAbi(routerAbi, "@/abis/Router.json", DEFAULT_ROUTER_ABI);
-  const router = new Contract(routerAddress, resolvedRouterAbi, signer);
-  const tx = await router.swap(tokenIn, tokenOut, amountIn, minAmountOut);
-  return tx.wait?.();
+  const resolvedAmmAbi = await resolveAbi(ammAbi, "@/lib/abi/AMM.json", null);
+  if (!resolvedAmmAbi) {
+    throw new Error("AMM ABI not found. Please provide ammAbi or ensure @/lib/abi/AMM.json exists");
+  }
+  const amm = new Contract(ammAddress, resolvedAmmAbi, signer);
+  
+  // Get poolId for the token pair
+  const poolId = await amm.getPoolId(tokenIn, tokenOut, feeBps);
+  
+  // Execute swap
+  const tx = await amm.swap(poolId, tokenIn, amountIn, minAmountOut, recipient);
+  const receipt = await tx.wait?.();
+  return { receipt, amountOut: receipt?.logs ? "0" : "0" }; // amountOut would be parsed from events
 }
 
 /**
@@ -242,6 +255,93 @@ export async function getUserLiquidity(
   return { type: "unknown", amount: "0" } as const;
 }
 
+/**
+ * Get token balance for a user address.
+ * Supports both ERC20 tokens and native ETH.
+ */
+export async function getTokenBalance(
+  provider: Provider | any,
+  tokenAddress: string,
+  userAddress: string,
+  decimals: number = 18,
+): Promise<string> {
+  // Native ETH balance
+  if (tokenAddress === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" || !tokenAddress) {
+    const balance = await provider.getBalance(userAddress);
+    return formatUnits(balance, decimals);
+  }
+
+  // ERC20 token balance
+  const tokenAbi = [
+    "function balanceOf(address owner) view returns (uint256)",
+    "function decimals() view returns (uint8)",
+  ];
+  try {
+    const token = new Contract(tokenAddress, tokenAbi, provider);
+    const balance = await token.balanceOf(userAddress);
+    // Try to get actual decimals from contract
+    let actualDecimals = decimals;
+    try {
+      actualDecimals = await token.decimals();
+    } catch {
+      // Use provided decimals if contract doesn't have decimals()
+    }
+    return formatUnits(balance, actualDecimals);
+  } catch (error) {
+    console.error("Error fetching token balance:", error);
+    return "0";
+  }
+}
+
+/**
+ * Get token allowance for a spender (e.g., router/AMM contract).
+ */
+export async function getTokenAllowance(
+  provider: Provider | any,
+  tokenAddress: string,
+  ownerAddress: string,
+  spenderAddress: string,
+): Promise<string> {
+  // Native ETH doesn't need allowance
+  if (tokenAddress === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" || !tokenAddress) {
+    return "0"; // Native ETH doesn't require approval
+  }
+
+  const tokenAbi = ["function allowance(address owner, address spender) view returns (uint256)"];
+  try {
+    const token = new Contract(tokenAddress, tokenAbi, provider);
+    const allowance = await token.allowance(ownerAddress, spenderAddress);
+    return allowance.toString();
+  } catch (error) {
+    console.error("Error fetching token allowance:", error);
+    return "0";
+  }
+}
+
+/**
+ * Approve token spending for a spender (e.g., AMM contract).
+ * Returns transaction receipt.
+ */
+export async function approveToken(
+  signer: JsonRpcSigner,
+  tokenAddress: string,
+  spenderAddress: string,
+  amount: string | number = "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // Max uint256
+  tokenAbi?: any,
+) {
+  // Native ETH doesn't need approval
+  if (tokenAddress === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" || !tokenAddress) {
+    return null; // No approval needed for native ETH
+  }
+
+  const resolvedTokenAbi = await resolveAbi(tokenAbi, "@/lib/abi/MockToken.json", [
+    "function approve(address spender, uint256 amount) returns (bool)",
+  ]);
+  const token = new Contract(tokenAddress, resolvedTokenAbi, signer);
+  const tx = await token.approve(spenderAddress, amount);
+  return tx.wait?.();
+}
+
 export default {
   getAllPools,
   getQuote,
@@ -250,4 +350,7 @@ export default {
   removeLiquidity,
   swap,
   getUserLiquidity,
+  getTokenBalance,
+  getTokenAllowance,
+  approveToken,
 };

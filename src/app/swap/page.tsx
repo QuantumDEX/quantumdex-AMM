@@ -45,14 +45,24 @@ const routeLegs = [
 export default function SwapPage() {
   const { isConnected, address } = useAccount();
   const chainId = useChainId();
+  const publicClient = usePublicClient();
+  const { data: walletClient } = useWalletClient();
 
   const [sellToken, setSellToken] = useState(tokens[0]);
   const [buyToken, setBuyToken] = useState(tokens[1]);
   const [slippage, setSlippage] = useState("0.5%");
   const [advancedMode, setAdvancedMode] = useState(false);
   const [sellAmount, setSellAmount] = useState<string>("");
-  const [estimatedBuyAmount, setEstimatedBuyAmount] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  const [loadingQuote, setLoadingQuote] = useState(false);
+  const [sellTokenBalance, setSellTokenBalance] = useState<string>("0");
+  const [buyTokenBalance, setBuyTokenBalance] = useState<string>("0");
+  const [tokenAllowance, setTokenAllowance] = useState<string>("0");
+  const [needsApproval, setNeedsApproval] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [txStatus, setTxStatus] = useState<"idle" | "pending" | "success" | "error">("idle");
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const activeNetwork = useMemo(
     () => (chainId ? networks.find((item) => item.id === chainId) : undefined),
@@ -68,19 +78,91 @@ export default function SwapPage() {
     routeCount: number;
   }>(null);
 
+  // Fetch token balances when wallet connects or tokens change
+  useEffect(() => {
+    if (!isConnected || !address || !publicClient) return;
+    const provider = publicClientToProvider(publicClient);
+    if (!provider) return;
+
+    let mounted = true;
+    (async () => {
+      try {
+        const [sellBal, buyBal] = await Promise.all([
+          amm.getTokenBalance(provider, sellToken.address, address, sellToken.decimals ?? 18),
+          amm.getTokenBalance(provider, buyToken.address, address, buyToken.decimals ?? 18),
+        ]);
+        if (mounted) {
+          setSellTokenBalance(sellBal);
+          setBuyTokenBalance(buyBal);
+        }
+      } catch (error) {
+        console.error("Error fetching balances:", error);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [isConnected, address, publicClient, sellToken, buyToken]);
+
+  // Check token allowance for ERC20 tokens
+  useEffect(() => {
+    if (!isConnected || !address || !publicClient) return;
+    // Skip for native ETH
+    if (sellToken.address === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE") {
+      setTokenAllowance("0");
+      setNeedsApproval(false);
+      return;
+    }
+
+    const provider = publicClientToProvider(publicClient);
+    if (!provider) return;
+
+    let mounted = true;
+    (async () => {
+      try {
+        const allowance = await amm.getTokenAllowance(provider, sellToken.address, address, AMM_ADDRESS);
+        if (mounted) {
+          setTokenAllowance(allowance);
+          // Check if approval is needed
+          if (sellAmount) {
+            const amountInWei = parseUnits(sellAmount, sellToken.decimals ?? 18);
+            setNeedsApproval(BigInt(allowance) < amountInWei);
+          } else {
+            setNeedsApproval(false);
+          }
+        }
+      } catch (error) {
+        console.error("Error checking allowance:", error);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [isConnected, address, publicClient, sellToken, sellAmount]);
+
   // Fetch on-chain quote when sellAmount or tokens change.
   useEffect(() => {
     let mounted = true;
     setQuote(null);
-    if (!isConnected || !sellAmount || !sellToken || !buyToken) return;
-    // create a provider for reads; uses injected provider for the current network
-    if (!window.ethereum) return;
-    const provider = new BrowserProvider(window.ethereum as any);
+    setLoadingQuote(true);
+    setErrorMessage(null);
+
+    if (!isConnected || !sellAmount || !sellToken || !buyToken || !publicClient) {
+      setLoadingQuote(false);
+      return;
+    }
+
+    const provider = publicClientToProvider(publicClient);
+    if (!provider) {
+      setLoadingQuote(false);
+      return;
+    }
+
     (async () => {
       try {
         const out = await amm.getQuote(
           provider as any,
-          ROUTER_ADDRESS,
+          ROUTER_ADDRESS || AMM_ADDRESS,
           sellToken.address,
           buyToken.address,
           sellAmount,
@@ -92,32 +174,134 @@ export default function SwapPage() {
         if (!mounted) return;
         if (!out) {
           setQuote(null);
+          setErrorMessage("Unable to fetch quote. Pool may not exist.");
           return;
         }
         const buyHuman = formatUnits(out, buyToken.decimals ?? 18);
-        const minReceived = (Number(buyHuman) * 0.995).toFixed(6);
+        const slippagePercent = parseFloat(slippage.replace("%", ""));
+        const minReceived = (Number(buyHuman) * (1 - slippagePercent / 100)).toFixed(6);
+        const priceRatio = Number(buyHuman) / Number(sellAmount);
         setQuote({
           sellAmount: sellAmount,
           buyAmount: buyHuman,
           minReceived,
-          executionPrice: `1 ${sellToken.symbol} ≈ ${(Number(sellToken.price as number) / Number(buyToken.price as number)).toFixed(6)} ${buyToken.symbol}`,
-          impact: "~0.04%",
+          executionPrice: `1 ${sellToken.symbol} ≈ ${priceRatio.toFixed(6)} ${buyToken.symbol}`,
+          impact: "~0.04%", // TODO: Calculate actual price impact
           routeCount: 1,
         });
-      } catch (e) {
+        setErrorMessage(null);
+      } catch (e: any) {
         console.error("quote error", e);
-        if (mounted) setQuote(null);
+        if (mounted) {
+          setQuote(null);
+          setErrorMessage(e?.message || "Failed to fetch quote");
+        }
+      } finally {
+        if (mounted) setLoadingQuote(false);
       }
     })();
     return () => {
       mounted = false;
     };
-  }, [isConnected, sellAmount, sellToken, buyToken]);
+  }, [isConnected, sellAmount, sellToken, buyToken, publicClient, slippage]);
 
   const handleFlip = () => {
+    const tempToken = sellToken;
+    const tempBalance = sellTokenBalance;
     setSellToken(buyToken);
-    setBuyToken(sellToken);
+    setBuyToken(tempToken);
+    setSellTokenBalance(buyTokenBalance);
+    setBuyTokenBalance(tempBalance);
+    setSellAmount("");
+    setQuote(null);
   };
+
+  const handleApprove = useCallback(async () => {
+    if (!isConnected || !address || !walletClient || !sellToken) return;
+
+    try {
+      setApproving(true);
+      setErrorMessage(null);
+      const signer = await walletClientToSigner(walletClient);
+      if (!signer) throw new Error("Failed to get signer");
+
+      await amm.approveToken(signer, sellToken.address, AMM_ADDRESS);
+      
+      // Refresh allowance
+      if (publicClient) {
+        const provider = publicClientToProvider(publicClient);
+        if (provider) {
+          const newAllowance = await amm.getTokenAllowance(provider, sellToken.address, address, AMM_ADDRESS);
+          setTokenAllowance(newAllowance);
+          setNeedsApproval(false);
+        }
+      }
+    } catch (error: unknown) {
+      console.error("Approval error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Approval failed";
+      setErrorMessage(errorMessage);
+    } finally {
+      setApproving(false);
+    }
+  }, [isConnected, address, walletClient, sellToken, publicClient]);
+
+  const handleSwap = useCallback(async () => {
+    if (!isConnected || !address || !walletClient || !sellAmount || !quote) return;
+
+    try {
+      setSubmitting(true);
+      setTxStatus("pending");
+      setErrorMessage(null);
+      const signer = await walletClientToSigner(walletClient);
+      if (!signer) throw new Error("Failed to get signer");
+
+      const amountIn = parseUnits(sellAmount, sellToken.decimals ?? 18);
+      const minAmountOut = parseUnits(quote.minReceived, buyToken.decimals ?? 18);
+
+      const result = await amm.swap(
+        signer,
+        AMM_ADDRESS,
+        sellToken.address,
+        buyToken.address,
+        amountIn.toString(),
+        minAmountOut.toString(),
+        address, // recipient
+        30, // feeBps - default 0.3%
+      );
+
+      if (result?.receipt) {
+        setTxHash(result.receipt.transactionHash);
+        setTxStatus("success");
+        
+        // Refresh balances after successful swap
+        if (publicClient) {
+          const provider = publicClientToProvider(publicClient);
+          if (provider) {
+            const [newSellBal, newBuyBal] = await Promise.all([
+              amm.getTokenBalance(provider, sellToken.address, address, sellToken.decimals ?? 18),
+              amm.getTokenBalance(provider, buyToken.address, address, buyToken.decimals ?? 18),
+            ]);
+            setSellTokenBalance(newSellBal);
+            setBuyTokenBalance(newBuyBal);
+          }
+        }
+        
+        // Reset form after successful swap
+        setTimeout(() => {
+          setSellAmount("");
+          setQuote(null);
+          setTxStatus("idle");
+        }, 3000);
+      }
+    } catch (error: unknown) {
+      console.error("Swap error:", error);
+      setTxStatus("error");
+      const errorMessage = error instanceof Error ? error.message : "Swap failed";
+      setErrorMessage(errorMessage);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [isConnected, address, walletClient, sellAmount, quote, sellToken, buyToken, publicClient]);
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-12 px-6 py-14">
@@ -164,9 +348,6 @@ export default function SwapPage() {
             <div className="space-y-2 rounded-2xl border border-zinc-200 bg-white px-4 py-4 dark:border-zinc-800 dark:bg-zinc-950/50">
               <div className="flex items-center justify-between text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">
                 <span>Sell</span>
-                <button className="rounded-full border border-zinc-200 px-2 py-0.5 text-[11px] font-semibold text-zinc-500 transition hover:border-emerald-400 hover:text-emerald-500 dark:border-zinc-700">
-                  Max
-                </button>
               </div>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
                 <div className="relative flex flex-1 items-center gap-2">
@@ -195,8 +376,17 @@ export default function SwapPage() {
                 />
               </div>
               <div className="flex flex-wrap items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
-                <span>Balance: {sellToken.balance} {sellToken.symbol}</span>
-                <span>Price: {sellToken.price}</span>
+                <span>Balance: {isConnected ? sellTokenBalance : sellToken.balance} {sellToken.symbol}</span>
+                <button
+                  onClick={() => {
+                    if (isConnected && sellTokenBalance) {
+                      setSellAmount(sellTokenBalance);
+                    }
+                  }}
+                  className="text-emerald-500 hover:text-emerald-600"
+                >
+                  Max
+                </button>
               </div>
             </div>
 
@@ -230,14 +420,14 @@ export default function SwapPage() {
                 </div>
                 <input
                   type="text"
-                  placeholder={isConnected ? "~ 0.00" : "—"}
+                  placeholder={loadingQuote ? "Loading..." : isConnected ? "~ 0.00" : "—"}
                   disabled
-                  value={quote?.buyAmount ?? ""}
+                  value={loadingQuote ? "" : quote?.buyAmount ?? ""}
                   className="w-full max-w-[160px] rounded-2xl border border-transparent bg-transparent text-right text-3xl font-semibold tracking-tight text-emerald-500 outline-none"
                 />
               </div>
               <div className="flex flex-wrap items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
-                <span>Balance: {buyToken.balance} {buyToken.symbol}</span>
+                <span>Balance: {isConnected ? buyTokenBalance : buyToken.balance} {buyToken.symbol}</span>
                 <span>Price: {buyToken.price}</span>
               </div>
             </div>
@@ -276,33 +466,41 @@ export default function SwapPage() {
               </div>
             </div>
 
-            <button
-              className="w-full rounded-2xl bg-emerald-500 py-4 text-base font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:bg-emerald-600 disabled:bg-zinc-300 disabled:text-zinc-500"
-              disabled={!isConnected || !sellAmount || submitting}
-              onClick={async () => {
-                if (!isConnected || !sellAmount) return;
-                if (!window.ethereum) return alert("No injected wallet found");
-                try {
-                  setSubmitting(true);
-                  const provider = new BrowserProvider(window.ethereum as any);
-                  const signer = await provider.getSigner();
-                  // precise conversion using ethers.parseUnits
-                  const amountIn = parseUnits(sellAmount, sellToken.decimals ?? 18) as any;
-                  const minOut = quote ? (parseUnits(quote.minReceived, buyToken.decimals ?? 18) as any) : (parseUnits("0", buyToken.decimals ?? 18) as any);
-                  // call helper — router ABI should match your deployed router
-                  const receipt = await amm.swap(signer as any, ROUTER_ADDRESS, sellToken.address, buyToken.address, amountIn, minOut);
-                  console.log("Swap receipt", receipt);
-                  alert("Swap transaction submitted — see console for receipt");
-                } catch (err) {
-                  console.error(err);
-                  alert("Swap failed: " + (((err as any)?.message) ?? "unknown"));
-                } finally {
-                  setSubmitting(false);
-                }
-              }}
-            >
-              {isConnected ? (submitting ? "Submitting…" : "Review & Execute") : "Connect Wallet to Swap"}
-            </button>
+            {errorMessage && (
+              <div className="rounded-2xl border border-red-200 bg-red-50/70 p-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
+                {errorMessage}
+              </div>
+            )}
+
+            {txStatus === "success" && txHash && (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3 text-sm text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+                Swap successful! Transaction: {shortenAddress(txHash, 8)}
+              </div>
+            )}
+
+            {needsApproval && sellToken.address !== "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" ? (
+              <button
+                className="w-full rounded-2xl bg-blue-500 py-4 text-base font-semibold text-white shadow-lg shadow-blue-500/30 transition hover:bg-blue-600 disabled:bg-zinc-300 disabled:text-zinc-500"
+                disabled={!isConnected || approving}
+                onClick={handleApprove}
+              >
+                {approving ? "Approving…" : `Approve ${sellToken.symbol}`}
+              </button>
+            ) : (
+              <button
+                className="w-full rounded-2xl bg-emerald-500 py-4 text-base font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:bg-emerald-600 disabled:bg-zinc-300 disabled:text-zinc-500"
+                disabled={!isConnected || !sellAmount || submitting || loadingQuote || !quote}
+                onClick={handleSwap}
+              >
+                {submitting
+                  ? "Submitting…"
+                  : txStatus === "pending"
+                    ? "Transaction Pending…"
+                    : !quote
+                      ? "Enter amount"
+                      : "Review & Execute"}
+              </button>
+            )}
             {isConnected ? (
               <p className="text-center text-xs text-zinc-500 dark:text-zinc-400">
                 QuantumRouter will batch quotes across {quote?.routeCount ?? 0} pools and settle atomically.
@@ -334,7 +532,13 @@ export default function SwapPage() {
             ))}
           </div>
 
-          {quote ? (
+          {loadingQuote ? (
+            <div className="rounded-2xl border border-zinc-200/70 bg-zinc-50/70 p-4 text-sm text-zinc-500 dark:border-zinc-800/60 dark:bg-zinc-900/60 dark:text-zinc-300">
+              <div className="flex items-center justify-center gap-2">
+                <span>Fetching quote...</span>
+              </div>
+            </div>
+          ) : quote ? (
             <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 p-4 text-sm text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
               <div className="flex items-center justify-between">
                 <span>Execution price</span>
@@ -342,16 +546,39 @@ export default function SwapPage() {
               </div>
               <div className="mt-2 flex items-center justify-between">
                 <span>Slippage ({slippage})</span>
-                <span className="font-semibold text-emerald-500">{quote.minReceived} USDC min received</span>
+                <span className="font-semibold text-emerald-500">
+                  {quote.minReceived} {buyToken.symbol} min received
+                </span>
               </div>
               <div className="mt-2 flex items-center justify-between">
                 <span>Price impact</span>
                 <span className="font-semibold text-emerald-500">{quote.impact}</span>
               </div>
+              {txHash && (
+                <div className="mt-3 rounded-lg border border-emerald-300/50 bg-emerald-100/50 p-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span>Transaction:</span>
+                    <a
+                      href={`${activeNetwork?.blockExplorers?.default?.url}/tx/${txHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-emerald-600 underline hover:text-emerald-700 dark:text-emerald-300"
+                    >
+                      {shortenAddress(txHash, 8)}
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : errorMessage ? (
+            <div className="rounded-2xl border border-red-200/70 bg-red-50/70 p-4 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
+              {errorMessage}
             </div>
           ) : (
             <div className="rounded-2xl border border-zinc-200/70 bg-zinc-50/70 p-4 text-sm text-zinc-500 dark:border-zinc-800/60 dark:bg-zinc-900/60 dark:text-zinc-300">
-              Connect a wallet to fetch live quotes, route breakdowns, and settlement guarantees.
+              {isConnected
+                ? "Enter an amount to see quote details, route breakdown, and settlement guarantees."
+                : "Connect a wallet to fetch live quotes, route breakdowns, and settlement guarantees."}
             </div>
           )}
 
