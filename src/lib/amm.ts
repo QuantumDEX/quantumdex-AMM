@@ -318,6 +318,30 @@ export async function getTokenAllowance(
   }
 }
 
+/**
+ * Approve token spending for a spender (e.g., AMM contract).
+ * Returns transaction receipt.
+ */
+export async function approveToken(
+  signer: JsonRpcSigner,
+  tokenAddress: string,
+  spenderAddress: string,
+  amount: string | number = "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", // Max uint256
+  tokenAbi?: any,
+) {
+  // Native ETH doesn't need approval
+  if (tokenAddress === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" || !tokenAddress) {
+    return null; // No approval needed for native ETH
+  }
+
+  const resolvedTokenAbi = await resolveAbi(tokenAbi, "@/lib/abi/MockToken.json", [
+    "function approve(address spender, uint256 amount) returns (bool)",
+  ]);
+  const token = new Contract(tokenAddress, resolvedTokenAbi, signer);
+  const tx = await token.approve(spenderAddress, amount);
+  return tx.wait?.();
+}
+
 export default {
   getAllPools,
   getQuote,
@@ -328,4 +352,5 @@ export default {
   getUserLiquidity,
   getTokenBalance,
   getTokenAllowance,
+  approveToken,
 };
