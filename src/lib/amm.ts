@@ -255,6 +255,69 @@ export async function getUserLiquidity(
   return { type: "unknown", amount: "0" } as const;
 }
 
+/**
+ * Get token balance for a user address.
+ * Supports both ERC20 tokens and native ETH.
+ */
+export async function getTokenBalance(
+  provider: Provider | any,
+  tokenAddress: string,
+  userAddress: string,
+  decimals: number = 18,
+): Promise<string> {
+  // Native ETH balance
+  if (tokenAddress === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" || !tokenAddress) {
+    const balance = await provider.getBalance(userAddress);
+    return formatUnits(balance, decimals);
+  }
+
+  // ERC20 token balance
+  const tokenAbi = [
+    "function balanceOf(address owner) view returns (uint256)",
+    "function decimals() view returns (uint8)",
+  ];
+  try {
+    const token = new Contract(tokenAddress, tokenAbi, provider);
+    const balance = await token.balanceOf(userAddress);
+    // Try to get actual decimals from contract
+    let actualDecimals = decimals;
+    try {
+      actualDecimals = await token.decimals();
+    } catch {
+      // Use provided decimals if contract doesn't have decimals()
+    }
+    return formatUnits(balance, actualDecimals);
+  } catch (error) {
+    console.error("Error fetching token balance:", error);
+    return "0";
+  }
+}
+
+/**
+ * Get token allowance for a spender (e.g., router/AMM contract).
+ */
+export async function getTokenAllowance(
+  provider: Provider | any,
+  tokenAddress: string,
+  ownerAddress: string,
+  spenderAddress: string,
+): Promise<string> {
+  // Native ETH doesn't need allowance
+  if (tokenAddress === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" || !tokenAddress) {
+    return "0"; // Native ETH doesn't require approval
+  }
+
+  const tokenAbi = ["function allowance(address owner, address spender) view returns (uint256)"];
+  try {
+    const token = new Contract(tokenAddress, tokenAbi, provider);
+    const allowance = await token.allowance(ownerAddress, spenderAddress);
+    return allowance.toString();
+  } catch (error) {
+    console.error("Error fetching token allowance:", error);
+    return "0";
+  }
+}
+
 export default {
   getAllPools,
   getQuote,
@@ -263,4 +326,6 @@ export default {
   removeLiquidity,
   swap,
   getUserLiquidity,
+  getTokenBalance,
+  getTokenAllowance,
 };
