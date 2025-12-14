@@ -603,11 +603,27 @@ contract AMM is ReentrancyGuard, Ownable {
             address tokenIn = path[i];
             bytes32 poolId = poolIds[i];
             address tokenOut = path[i + 1];
+            bool isLastHop = (i == numHops - 1);
+            address hopRecipient = isLastHop ? recipient : address(this);
 
             // Execute single hop swap
             // For intermediate hops, recipient is this contract (tokens stay in contract)
             // For final hop, recipient is the final recipient
-            currentAmount = _executeHop(poolId, tokenIn, tokenOut, currentAmount, i == numHops - 1 ? recipient : address(this));
+            uint256 amountInForEvent = currentAmount;
+            currentAmount = _executeHop(poolId, tokenIn, tokenOut, currentAmount, hopRecipient);
+
+            // Emit per-hop events for off-chain indexing
+            emit Swap(poolId, msg.sender, tokenIn, amountInForEvent, currentAmount, hopRecipient);
+
+            Pool storage updatedPool = pools[poolId];
+            emit PoolUpdated(
+                poolId,
+                updatedPool.token0,
+                updatedPool.token1,
+                updatedPool.reserve0,
+                updatedPool.reserve1,
+                updatedPool.totalSupply
+            );
         }
 
         amountOut = currentAmount;
