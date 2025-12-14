@@ -400,18 +400,21 @@ describe("Multi-hop Swaps", function () {
         .swapMultiHop(path, poolIds, swapAmount, 0, alice.address);
       const receipt = await tx.wait();
 
-      // Check that Swap events were emitted (one per hop)
-      const swapEvents = receipt.logs
-        .map((log) => {
-          try {
-            return amm.interface.parseLog(log);
-          } catch {
-            return null;
-          }
-        })
-        .filter((parsed) => parsed && parsed.name === "Swap");
+      // Assert per-hop Swap events by querying indexed logs instead of parsing the receipt.
+      // This is closer to how off-chain indexers/frontends will query events.
+      const swapLogs = await amm.queryFilter(
+        amm.filters.Swap(null, null, null),
+        receipt.blockNumber,
+        receipt.blockNumber
+      );
 
-      expect(swapEvents.length).to.equal(poolIds.length);
+      // Filter down to just this tx (same block may include other tests/txs).
+      const swapLogsForTx = swapLogs.filter(
+        (e) => e.transactionHash === receipt.hash
+      );
+
+      // swapMultiHop should emit Swap once per hop
+      expect(swapLogsForTx.length).to.equal(poolIds.length);
     });
 
     it("Should emit MultiHopSwap event", async function () {
