@@ -105,6 +105,17 @@ contract AMM is ReentrancyGuard, Ownable {
         address provider
     );
 
+    /// @notice Emitted whenever pool reserves and/or totalSupply change
+    /// @dev Optimized for off-chain indexing: poolId/token0/token1 are indexed; reserves are in event data.
+    event PoolUpdated(
+        bytes32 indexed poolId,
+        address indexed token0,
+        address indexed token1,
+        uint112 reserve0,
+        uint112 reserve1,
+        uint256 totalSupply
+    );
+
     event LiquidityAdded(
         bytes32 indexed poolId,
         address indexed provider,
@@ -270,6 +281,8 @@ contract AMM is ReentrancyGuard, Ownable {
         pool.reserve1 = uint112(amount1);
         pool.feeBps = feeBps;
         // totalSupply includes locked liquidity to maintain accurate accounting
+
+        emit PoolUpdated(poolId, pool.token0, pool.token1, pool.reserve0, pool.reserve1, pool.totalSupply);
         pool.totalSupply = liquidity;
         pool.exists = true;
         // Lock MINIMUM_LIQUIDITY to address(0) - this can never be removed
@@ -338,6 +351,8 @@ contract AMM is ReentrancyGuard, Ownable {
             pool.reserve1 = uint112(uint256(reserve1) + amount1);
         }
 
+        emit PoolUpdated(poolId, pool.token0, pool.token1, pool.reserve0, pool.reserve1, pool.totalSupply);
+
         emit LiquidityAdded(poolId, msg.sender, liquidity, amount0, amount1);
     }
 
@@ -380,6 +395,8 @@ contract AMM is ReentrancyGuard, Ownable {
             pool.reserve1 = uint112(uint256(reserve1) - amount1);
         }
         pool.totalSupply = remainingSupply;
+
+        emit PoolUpdated(poolId, pool.token0, pool.token1, pool.reserve0, pool.reserve1, pool.totalSupply);
 
         _safeTransfer(pool.token0, msg.sender, amount0);
         _safeTransfer(pool.token1, msg.sender, amount1);
@@ -445,6 +462,8 @@ contract AMM is ReentrancyGuard, Ownable {
             _safeTransfer(pool.token0, recipient, amountOut);
         }
 
+        emit PoolUpdated(poolId, pool.token0, pool.token1, pool.reserve0, pool.reserve1, pool.totalSupply);
+
         emit Swap(poolId, msg.sender, tokenIn, amountIn, amountOut, recipient);
     }
 
@@ -463,33 +482,33 @@ contract AMM is ReentrancyGuard, Ownable {
         bytes calldata data
     ) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
-        
+
         Pool storage pool = pools[poolId];
         if (!pool.exists) revert PoolNotFound();
-        
+
         // Verify token is part of the pool
         if (token != pool.token0 && token != pool.token1) revert InvalidToken();
-        
+
         // Calculate fee (9 bps = 0.09%)
         uint256 fee = (amount * FLASH_LOAN_FEE_BPS) / 10000;
         uint256 repayAmount = amount + fee;
-        
+
         // Get initial balance
         uint256 balanceBefore = _getBalance(token);
-        
+
         // Verify pool has sufficient liquidity
         if (token == pool.token0) {
             if (uint256(pool.reserve0) < amount) revert InsufficientLiquidityForFlashLoan();
         } else {
             if (uint256(pool.reserve1) < amount) revert InsufficientLiquidityForFlashLoan();
         }
-        
+
         // Transfer tokens to borrower
         _safeTransfer(token, msg.sender, amount);
-        
+
         // Call callback
         IFlashLoanReceiver(msg.sender).onFlashLoan(token, amount, fee, data);
-        
+
         // Verify repayment + fee
         // We sent out 'amount', so we should receive back 'amount + fee'
         // Net change: -amount + (amount + fee) = +fee
@@ -498,7 +517,7 @@ contract AMM is ReentrancyGuard, Ownable {
         if (balanceAfter < balanceBefore + fee) {
             revert FlashLoanNotRepaid();
         }
-        
+
         // Update reserves: add full repayment (amount + fee)
         // Flash loans are temporary - we don't reduce reserves when lending,
         // but we add the full repayment back, effectively increasing reserves by the fee
@@ -507,7 +526,9 @@ contract AMM is ReentrancyGuard, Ownable {
         } else {
             pool.reserve1 = uint112(uint256(pool.reserve1) + repayAmount);
         }
-        
+
+        emit PoolUpdated(poolId, pool.token0, pool.token1, pool.reserve0, pool.reserve1, pool.totalSupply);
+
         emit FlashLoan(poolId, token, msg.sender, amount, fee);
     }
 
@@ -551,23 +572,23 @@ contract AMM is ReentrancyGuard, Ownable {
         // Validate path and poolIds
         if (path.length < 2) revert InvalidPath();
         if (poolIds.length != path.length - 1) revert InvalidPathLength();
-        
+
         // Validate input amount
         if (amountIn == 0) {
             revert ZeroInput();
         }
-        
+
         // Validate recipient
         if (recipient == address(0)) {
             revert ZeroRecipient();
         }
-        
+
         // Calculate number of hops
         uint256 numHops = poolIds.length;
         if (numHops == 0) revert InvalidPath();
         if (numHops > 10) revert InvalidPathLength(); // Gas limit protection (max 10 hops)
         uint256 currentAmount = amountIn;
-        
+
         // Handle initial token transfer (only for first hop)
         address firstToken = path[0];
         if (firstToken == ETH) {
@@ -576,25 +597,25 @@ contract AMM is ReentrancyGuard, Ownable {
             if (msg.value != 0) revert UnexpectedETH();
             _safeTransferFrom(firstToken, msg.sender, address(this), amountIn);
         }
-        
+
         // Execute swaps sequentially
         for (uint256 i = 0; i < numHops; i++) {
             address tokenIn = path[i];
             bytes32 poolId = poolIds[i];
             address tokenOut = path[i + 1];
-            
+
             // Execute single hop swap
             // For intermediate hops, recipient is this contract (tokens stay in contract)
             // For final hop, recipient is the final recipient
             currentAmount = _executeHop(poolId, tokenIn, tokenOut, currentAmount, i == numHops - 1 ? recipient : address(this));
         }
-        
+
         amountOut = currentAmount;
         if (amountOut < minAmountOut) revert SlippageExceeded();
-        
+
         // Validate final output is non-zero
         if (amountOut == 0) revert ZeroOutput();
-        
+
         // Emit MultiHopSwap event
         emit MultiHopSwap(msg.sender, path[0], path[path.length - 1], path, poolIds, amountIn, amountOut, recipient);
     }
@@ -631,7 +652,7 @@ contract AMM is ReentrancyGuard, Ownable {
         if (!pool.exists) {
             revert InvalidPool();
         }
-        
+
         // Determine swap direction and validate tokens match pool
         bool zeroForOne;
         if (tokenIn == pool.token0 && tokenOut == pool.token1) {
@@ -641,14 +662,14 @@ contract AMM is ReentrancyGuard, Ownable {
         } else {
             revert InvalidPath();
         }
-        
+
         // Get reserves and validate
         (uint112 reserve0, uint112 reserve1) = (pool.reserve0, pool.reserve1);
         if (reserve0 == 0 || reserve1 == 0) revert NoReserves();
-        
+
         // Calculate amount out with fee
         uint256 amountInWithFee = (amountIn * (10000 - pool.feeBps)) / 10000;
-        
+
         if (zeroForOne) {
             amountOut = _getAmountOut(amountInWithFee, reserve0, reserve1);
             pool.reserve0 = uint112(uint256(reserve0) + amountIn);
@@ -660,7 +681,7 @@ contract AMM is ReentrancyGuard, Ownable {
             pool.reserve0 = uint112(uint256(reserve0) - amountOut);
             _safeTransfer(pool.token0, recipient, amountOut);
         }
-        
+
         return amountOut;
     }
 
@@ -734,7 +755,7 @@ contract AMM is ReentrancyGuard, Ownable {
             pool.reserve0 = uint112(uint256(reserve0) - amountOut);
             _safeTransfer(pool.token0, recipient, amountOut);
         }
-        
+
         return amountOut;
     }
 
