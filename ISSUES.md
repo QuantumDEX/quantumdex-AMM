@@ -64,9 +64,6 @@ Polish UI using Tailwind; ensure components are responsive and accessible.
 - Tailwind CSS used throughout
 - Dark mode support via Tailwind dark: classes
 
----
-
-## ❌ Pending Issues
 
 ### Issue #4: Logo Design & Brand Identity
 **Status:** ✅ COMPLETED  
@@ -158,78 +155,72 @@ Complete UI rebrand with a chic, modern design. Remove the current landing page 
 
 ---
 
+---
+
 ### Issue #6: Port `lib/amm.ts` to ethers (contract bindings)
-**Status:** ❌ PENDING  
-**Labels:** `frontend`, `critical`, `blocking`, `contract-integration`  
+**Status:** ✅ COMPLETED  
+**Labels:** `frontend`, `critical`, `blocking`, `contract-integration`, `completed`  
 **Priority:** HIGH
 
 **Description:**
 Implement ethers contract wrappers to call AMM contract functions and read events. The current `lib/amm.ts` has generic factory/router functions, but needs to be updated to work directly with the AMM contract interface.
 
-**Current State:**
-- Generic factory/router functions exist
-- AMM ABI is available at `src/lib/abi/AMM.json`
-- Pages expect functions that work with the AMM contract directly
-
 **Acceptance Criteria:**
-- [ ] `getAllPools(contractAddress, provider)` - Reads PoolCreated events from AMM contract
-- [ ] `getPool(poolId, contractAddress, provider)` - Reads pool data using `getPool(bytes32)` function
-- [ ] `createPool(tokenA, tokenB, amountA, amountB, contractAddress, signer)` - Calls AMM's `createPool` function
-- [ ] `addLiquidity(poolId, amount0, amount1, contractAddress, signer)` - Calls AMM's `addLiquidity` function
-- [ ] `removeLiquidity(poolId, liquidity, contractAddress, signer)` - Calls AMM's `removeLiquidity` function
-- [ ] `swap(poolId, tokenIn, amountIn, minAmountOut, recipient, contractAddress, signer)` - Calls AMM's `swap` function
-- [ ] `getUserLiquidity(poolId, userAddress, contractAddress, provider)` - Calls AMM's `getLpBalance` function
-- [ ] All functions return expected types matching the contract interface
-- [ ] Functions handle errors appropriately
-- [ ] Contract address configuration via environment variable (see Technical Notes)
+- [x] `getAllPools(contractAddress, provider)` - Reads PoolCreated events from AMM contract
+- [x] `getPool(poolId, contractAddress, provider)` - Reads pool data using `getPool(bytes32)` function
+- [x] `createPool(tokenA, tokenB, amountA, amountB, contractAddress, signer)` - Calls AMM's `createPool` function
+- [x] `addLiquidity(poolId, amount0, amount1, contractAddress, signer)` - Calls AMM's `addLiquidity` function
+- [x] `removeLiquidity(poolId, liquidity, contractAddress, signer)` - Calls AMM's `removeLiquidity` function
+- [x] `swap(poolId, tokenIn, amountIn, minAmountOut, recipient, contractAddress, signer)` - Calls AMM's `swap` function
+- [x] `getUserLiquidity(poolId, userAddress, contractAddress, provider)` - Calls AMM's `getLpBalance` function
+- [x] All functions return expected types matching the contract interface
+- [x] Functions handle errors appropriately
+- [x] Contract address configuration via environment variable
 
-**Technical Notes:**
-- AMM contract uses `bytes32 poolId` (not address)
-- PoolCreated event signature: `PoolCreated(bytes32 indexed poolId, address indexed token0, address indexed token1, uint16 feeBps, ...)`
-- Contract functions use different signatures than factory/router pattern
-- Need to use ABI from `src/lib/abi/AMM.json`
-- **Contract Address:** The AMM contract will be deployed and the address will be provided. Use `NEXT_PUBLIC_AMM_CONTRACT_ADDRESS` environment variable. Do not hardcode contract addresses.
-
-**Blocking:**
-This issue blocks all contract interaction features (swap, pools, liquidity management).
+**Implementation Notes:**
+- AMM contract bindings implemented with TypeScript interfaces
+- All required functions implemented in `src/lib/amm.ts`
+- Proper error handling and type safety
+- Uses `NEXT_PUBLIC_AMM_CONTRACT_ADDRESS` environment variable
+- Commit: `f25afc3` - "feat: implement AMM contract bindings with TypeScript interfaces"
 
 ---
 
 ### Issue #7: Swap Component — Contract Integration
-**Status:** ❌ PENDING  
-**Labels:** `frontend`, `feature`, `swap`  
+**Status:** ✅ COMPLETED  
+**Labels:** `frontend`, `feature`, `swap`, `completed`  
 **Priority:** HIGH  
 **Depends on:** #6
 
 **Description:**
 Port `src/app/swap/page.tsx` to use the new contract helpers and wallet signer to send swap transactions. The UI exists but uses mock data and generic router functions.
 
-**Current State:**
-- UI exists at `/swap` route
-- Uses mock token data
-- Has quote estimation logic
-- Submit button calls generic `amm.swap()` function
-
 **Acceptance Criteria:**
-- [ ] User can select tokens from available pools
-- [ ] User enters amount to swap
-- [ ] Component calculates estimated output using pool reserves
-- [ ] Component shows slippage protection
-- [ ] User can submit swap transaction
-- [ ] Transaction is sent to AMM contract's `swap` function
-- [ ] Success/failure feedback displayed
-- [ ] Transaction receipt shown
-- [ ] Pool reserves update after swap
+- [x] User can select tokens from available pools
+- [x] User enters amount to swap
+- [x] Component calculates estimated output using pool reserves
+- [x] Component shows slippage protection
+- [x] User can submit swap transaction
+- [x] Transaction is sent to AMM contract's `swap` function
+- [x] Success/failure feedback displayed
+- [x] Transaction receipt shown
+- [x] Pool reserves update after swap
 
-**Technical Notes:**
-- Need to fetch available pools first
-- Calculate swap output using constant product formula: `amountOut = (amountIn * reserveOut) / (reserveIn + amountIn)`
-- Apply fee: `amountInWithFee = amountIn * (10000 - feeBps) / 10000`
-- Need to determine `poolId` from token pair
-- Need to determine swap direction (zeroForOne)
-- **Contract Address:** Use `NEXT_PUBLIC_AMM_CONTRACT_ADDRESS` environment variable. Contract will be deployed and address provided.
+**Implementation Notes:**
+- Swap page fully integrated with AMM contract
+- Token approval handling implemented
+- Balance and allowance fetching
+- Quote estimation with slippage protection
+- Transaction receipt display
+- Input validation and error handling
+- Multiple commits implementing features incrementally
+- Final merge: PR #10 "Swap component implementation"
 
 ---
+
+## ❌ Pending Issues
+
+
 
 ### Issue #8: Pools List & Pool Details Component — Contract Integration
 **Status:** ❌ PENDING  
