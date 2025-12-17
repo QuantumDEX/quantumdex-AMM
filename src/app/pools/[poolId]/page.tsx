@@ -108,7 +108,9 @@ export default function PoolDetailsPage({ params }: { params: Promise<{ poolId: 
         signer
       );
 
-      setSuccess(`Liquidity added successfully! Received ${result.liquidity.toString()} LP tokens.`);
+await result.wait(); // Wait for transaction confirmation
+      
+      setSuccess(`Liquidity added successfully! Transaction: ${result.hash}`);
       
       // Reset form and refresh data
       setToken0Amount("");
@@ -167,7 +169,9 @@ export default function PoolDetailsPage({ params }: { params: Promise<{ poolId: 
         signer
       );
 
-      setSuccess(`Liquidity removed successfully! Received ${result.amount0.toString()} and ${result.amount1.toString()} tokens.`);
+      await result.wait(); // Wait for transaction confirmation
+      
+      setSuccess(`Liquidity removed successfully! Transaction: ${result.hash}`);
       
       // Reset form and refresh data
       setLiquidityToRemove("");

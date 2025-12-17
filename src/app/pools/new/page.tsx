@@ -75,11 +75,13 @@ export default function CreatePoolPage() {
         signer
       );
 
-      setSuccess(`Pool created successfully! Pool ID: ${result.poolId.substring(0, 10)}...`);
+      await result.wait(); // Wait for transaction confirmation
       
-      // Redirect to pool details after a short delay
+      setSuccess(`Pool created successfully! Transaction: ${result.hash}`);
+      
+      // Redirect to pools list after a short delay
       setTimeout(() => {
-        router.push(`/pools/${encodeURIComponent(result.poolId)}`);
+        router.push("/pools");
       }, 2000);
     } catch (err) {
       console.error("Error creating pool:", err);

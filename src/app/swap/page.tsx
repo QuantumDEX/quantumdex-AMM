@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useAccount, useChainId } from "wagmi";
+import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
 
 import { networks } from "@/config/wagmi";
+import { publicClientToProvider, walletClientToSigner } from "@/config/adapter";
 import { shortenAddress } from "@/lib/utils";
-import { BrowserProvider, parseUnits, formatUnits } from "ethers";
-import amm from "@/lib/amm";
+import { formatUnits, parseUnits } from "ethers";
+import amm, { AMM_CONTRACT_ADDRESS as AMM_ADDRESS } from "@/lib/amm";
 
 // Add real addresses when available. These are placeholders used for example.
 const ROUTER_ADDRESS = process.env.NEXT_PUBLIC_ROUTER_ADDRESS ?? "0x0000000000000000000000000000000000000000";
@@ -256,9 +257,11 @@ export default function SwapPage() {
       if (!signer) throw new Error("Failed to get signer");
 
       const amountIn = parseUnits(sellAmount, sellToken.decimals ?? 18);
+      
+      // Use minReceived as min output
       const minAmountOut = parseUnits(quote.minReceived, buyToken.decimals ?? 18);
 
-      const result = await amm.swap(
+      const result = await amm.swapTokens(
         signer,
         AMM_ADDRESS,
         sellToken.address,
@@ -269,30 +272,32 @@ export default function SwapPage() {
         30, // feeBps - default 0.3%
       );
 
-      if (result?.receipt) {
-        setTxHash(result.receipt.transactionHash);
-        setTxStatus("success");
-        
-        // Refresh balances after successful swap
-        if (publicClient) {
-          const provider = publicClientToProvider(publicClient);
-          if (provider) {
-            const [newSellBal, newBuyBal] = await Promise.all([
-              amm.getTokenBalance(provider, sellToken.address, address, sellToken.decimals ?? 18),
-              amm.getTokenBalance(provider, buyToken.address, address, buyToken.decimals ?? 18),
-            ]);
-            setSellTokenBalance(newSellBal);
-            setBuyTokenBalance(newBuyBal);
-          }
+      setTxHash(result.hash);
+      
+      // Wait for transaction
+      await result.wait();
+      
+      setTxStatus("success");
+      
+      // Refresh balances after successful swap
+      if (publicClient) {
+        const provider = publicClientToProvider(publicClient);
+        if (provider) {
+          const [newSellBal, newBuyBal] = await Promise.all([
+            amm.getTokenBalance(provider, sellToken.address, address, sellToken.decimals ?? 18),
+            amm.getTokenBalance(provider, buyToken.address, address, buyToken.decimals ?? 18),
+          ]);
+          setSellTokenBalance(newSellBal);
+          setBuyTokenBalance(newBuyBal);
         }
-        
-        // Reset form after successful swap
-        setTimeout(() => {
-          setSellAmount("");
-          setQuote(null);
-          setTxStatus("idle");
-        }, 3000);
       }
+      
+      // Reset form after successful swap
+      setTimeout(() => {
+        setSellAmount("");
+        setQuote(null);
+        setTxStatus("idle");
+      }, 3000);
     } catch (error: unknown) {
       console.error("Swap error:", error);
       setTxStatus("error");
