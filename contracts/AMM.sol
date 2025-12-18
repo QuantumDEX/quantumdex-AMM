@@ -484,7 +484,7 @@ contract AMM is ReentrancyGuard, Ownable {
             revert InvalidPool();
         }
         
-        // Determine swap direction
+        // Determine swap direction and validate tokens match pool
         bool zeroForOne;
         if (tokenIn == pool.token0 && tokenOut == pool.token1) {
             zeroForOne = true;
@@ -493,6 +493,13 @@ contract AMM is ReentrancyGuard, Ownable {
         } else {
             revert InvalidPath();
         }
+        
+        // Additional validation: ensure tokens are part of this pool
+        require(
+            (tokenIn == pool.token0 || tokenIn == pool.token1) &&
+            (tokenOut == pool.token0 || tokenOut == pool.token1),
+            "token mismatch"
+        );
         
         // Get reserves
         (uint112 reserve0, uint112 reserve1) = (pool.reserve0, pool.reserve1);
