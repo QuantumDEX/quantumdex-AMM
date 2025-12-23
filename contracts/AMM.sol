@@ -496,13 +496,6 @@ contract AMM is ReentrancyGuard, Ownable {
             revert InvalidPath();
         }
         
-        // Additional validation: ensure tokens are part of this pool
-        require(
-            (tokenIn == pool.token0 || tokenIn == pool.token1) &&
-            (tokenOut == pool.token0 || tokenOut == pool.token1),
-            "token mismatch"
-        );
-        
         // Get reserves
         (uint112 reserve0, uint112 reserve1) = (pool.reserve0, pool.reserve1);
         require(reserve0 > 0 && reserve1 > 0, "no reserves");
