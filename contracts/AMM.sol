@@ -135,10 +135,11 @@ contract AMM is ReentrancyGuard, Ownable {
     event Swap(
         bytes32 indexed poolId,
         address indexed sender,
-        address indexed tokenIn,
+        address indexed recipient,
+        address tokenIn,
+        address tokenOut,
         uint256 amountIn,
-        uint256 amountOut,
-        address recipient
+        uint256 amountOut
     );
 
     event MultiHopSwap(
@@ -158,6 +159,19 @@ contract AMM is ReentrancyGuard, Ownable {
         address indexed borrower,
         uint256 amount,
         uint256 fee
+    );
+
+    /// @notice Emitted when a swap causes a significant price change
+    /// @dev Helps frontends track price movements and update UI efficiently
+    /// @dev Price is calculated as reserve1/reserve0 * 1e18 for precision
+    event PriceUpdate(
+        bytes32 indexed poolId,
+        address indexed token0,
+        address indexed token1,
+        uint256 price,
+        uint112 reserve0,
+        uint112 reserve1,
+        uint256 timestamp
     );
 
     constructor(uint16 _defaultFeeBps) Ownable(msg.sender) {
