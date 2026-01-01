@@ -454,7 +454,9 @@ contract AMM is ReentrancyGuard, Ownable {
 
         uint256 amountInWithFee = (amountIn * (10000 - pool.feeBps)) / 10000;
 
+        address tokenOut;
         if (zeroForOne) {
+            tokenOut = pool.token1;
             amountOut = _getAmountOut(amountInWithFee, reserve0, reserve1);
             if (amountOut < minAmountOut) revert SlippageExceeded();
 
@@ -465,6 +467,7 @@ contract AMM is ReentrancyGuard, Ownable {
             }
             _safeTransfer(pool.token1, recipient, amountOut);
         } else {
+            tokenOut = pool.token0;
             amountOut = _getAmountOut(amountInWithFee, reserve1, reserve0);
             if (amountOut < minAmountOut) revert SlippageExceeded();
 
@@ -478,7 +481,11 @@ contract AMM is ReentrancyGuard, Ownable {
 
         emit PoolUpdated(poolId, pool.token0, pool.token1, pool.reserve0, pool.reserve1, pool.totalSupply);
 
-        emit Swap(poolId, msg.sender, tokenIn, amountIn, amountOut, recipient);
+        // Calculate and emit price update (price = reserve1/reserve0 * 1e18)
+        uint256 price = (uint256(pool.reserve1) * 1e18) / uint256(pool.reserve0);
+        emit PriceUpdate(poolId, pool.token0, pool.token1, price, pool.reserve0, pool.reserve1, block.timestamp);
+
+        emit Swap(poolId, msg.sender, recipient, tokenIn, tokenOut, amountIn, amountOut);
     }
 
     /// @notice Execute a flash loan from a pool
@@ -627,7 +634,7 @@ contract AMM is ReentrancyGuard, Ownable {
             currentAmount = _executeHop(poolId, tokenIn, tokenOut, currentAmount, hopRecipient);
 
             // Emit per-hop events for off-chain indexing
-            emit Swap(poolId, msg.sender, tokenIn, amountInForEvent, currentAmount, hopRecipient);
+            emit Swap(poolId, msg.sender, hopRecipient, tokenIn, tokenOut, amountInForEvent, currentAmount);
 
             Pool storage updatedPool = pools[poolId];
             emit PoolUpdated(
@@ -638,6 +645,10 @@ contract AMM is ReentrancyGuard, Ownable {
                 updatedPool.reserve1,
                 updatedPool.totalSupply
             );
+
+            // Emit price update for each hop
+            uint256 price = (uint256(updatedPool.reserve1) * 1e18) / uint256(updatedPool.reserve0);
+            emit PriceUpdate(poolId, updatedPool.token0, updatedPool.token1, price, updatedPool.reserve0, updatedPool.reserve1, block.timestamp);
         }
 
         amountOut = currentAmount;
@@ -751,7 +762,7 @@ contract AMM is ReentrancyGuard, Ownable {
             currentAmount = _executeHop(pool, currentToken, currentAmount, isLastHop ? recipient : address(this));
 
             // Emit Swap event for this hop
-            emit Swap(poolId, msg.sender, currentToken, i == 0 ? amountIn : currentAmount, currentAmount, isLastHop ? recipient : address(this));
+            emit Swap(poolId, msg.sender, isLastHop ? recipient : address(this), currentToken, nextToken, i == 0 ? amountIn : currentAmount, currentAmount);
 
             // Update for next iteration
             currentToken = nextToken;
