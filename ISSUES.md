@@ -313,8 +313,6 @@ Implement flash loan functionality to allow users to borrow tokens from pools wi
 
 ---
 
-## ❌ Pending Issues
-
 ### Issue #12: Gas Optimization
 **Status:** ✅ COMPLETED  
 **Labels:** `smart-contracts`, `optimization`, `completed`  
@@ -350,30 +348,65 @@ Optimize contract gas usage through storage packing, function optimization, and 
 ---
 
 ### Issue #13: Events Indexing Optimization
-**Status:** ❌ PENDING  
-**Labels:** `smart-contracts`, `optimization`, `frontend`  
+**Status:** ✅ COMPLETED  
+**Labels:** `smart-contracts`, `optimization`, `frontend`, `completed`  
 **Priority:** LOW
 
 **Description:**
 Optimize event emissions for better off-chain indexing and frontend querying.
 
 **Current State:**
-- Events are emitted but may not be optimized for indexing
+- ✅ All events optimized with proper indexed parameters
+- ✅ PriceUpdate event added for efficient price tracking
+- ✅ Comprehensive event documentation created
 
 **Acceptance Criteria:**
-- [ ] Review all event parameters
-- [ ] Ensure important fields are indexed
-- [ ] Add events for state changes that frontend needs
-- [ ] Consider adding `PoolUpdated` event for reserve changes
-- [ ] Document event structure for frontend
-- [ ] Test event querying performance
+- [x] Review all event parameters
+- [x] Ensure important fields are indexed
+- [x] Add events for state changes that frontend needs
+- [x] Consider adding `PoolUpdated` event for reserve changes (already existed)
+- [x] Add `PriceUpdate` event for price tracking
+- [x] Document event structure for frontend
+- [x] Test event querying performance (documented in EVENT_DOCUMENTATION.md)
+
+**Implementation Notes:**
+- **Optimized Swap Event**: Added `recipient` as indexed parameter and `tokenOut` to event data for complete swap information
+- **New PriceUpdate Event**: Emitted after every swap to track price changes efficiently
+  - Price calculated as `(reserve1 * 1e18) / reserve0` for precision
+  - Includes timestamp for historical tracking
+  - Indexed by poolId, token0, token1 for efficient filtering
+- **Event Documentation**: Created `EVENT_DOCUMENTATION.md` with:
+  - Complete specifications for all 8 event types
+  - Indexing strategy and rationale
+  - Frontend query examples using ethers.js v6 and viem
+  - Gas cost analysis and optimization trade-offs
+  - Best practices for event caching and real-time updates
+- **Indexing Strategy**:
+  - All events index `poolId` for pool-specific filtering
+  - Pool events index `token0` and `token1` for token-pair filtering
+  - User events index `sender`/`provider`/`borrower`/`recipient` for user-specific queries
+  - Balanced approach: 3 indexed parameters per event (Solidity maximum)
+- **Gas Impact**: Each indexed parameter adds ~375 gas, but enables much faster queries
+- **Events Emitted**:
+  1. `PoolCreated` - Pool initialization
+  2. `PoolUpdated` - Reserve/supply changes (after every state change)
+  3. `PriceUpdate` - Price tracking (after swaps)
+  4. `LiquidityAdded` - Liquidity provision
+  5. `LiquidityRemoved` - Liquidity withdrawal
+  6. `Swap` - Individual swaps (including multi-hop)
+  7. `MultiHopSwap` - Multi-hop swap summary
+  8. `FlashLoan` - Flash loan execution
 
 **Technical Notes:**
 - Indexed parameters cost more gas but enable efficient filtering
-- Frontend needs to query events efficiently
-- Consider adding events for price changes, volume, etc.
+- Frontend can query events efficiently using indexed parameters
+- Price tracking via PriceUpdate event reduces need for on-chain price queries
+- All events include complete data needed for frontend display
+- Documentation includes real-time monitoring examples
 
 ---
+
+## ❌ Pending Issues
 
 ### Issue #14: Upgradeability Pattern
 **Status:** ❌ PENDING  
