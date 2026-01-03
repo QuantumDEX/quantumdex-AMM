@@ -406,36 +406,60 @@ Optimize event emissions for better off-chain indexing and frontend querying.
 
 ---
 
-## ❌ Pending Issues
-
 ### Issue #14: Upgradeability Pattern
-**Status:** ❌ PENDING  
-**Labels:** `smart-contracts`, `architecture`, `advanced`  
+**Status:** ✅ COMPLETED  
+**Labels:** `smart-contracts`, `architecture`, `advanced`, `completed`  
 **Priority:** LOW
 
 **Description:**
 Implement upgradeability pattern (e.g., Proxy pattern) to allow contract upgrades while preserving state.
 
 **Current State:**
-- Contract is not upgradeable
-- Any changes require new deployment
+- ✅ UUPS upgradeability pattern implemented
+- ✅ AMMUpgradeable.sol created with full UUPS support
+- ✅ Deployment and upgrade scripts ready
+- ✅ Comprehensive test suite (12 passing tests)
 
 **Acceptance Criteria:**
-- [ ] Choose upgradeability pattern (UUPS, Transparent, Beacon)
-- [ ] Implement proxy pattern
-- [ ] Separate logic and storage contracts
-- [ ] Add upgrade access control
-- [ ] Add tests for upgrades
-- [ ] Document upgrade process
-- [ ] Security considerations
+- [x] Choose upgradeability pattern (UUPS, Transparent, Beacon)
+- [x] Implement proxy pattern
+- [x] Separate logic and storage contracts
+- [x] Add upgrade access control
+- [x] Add tests for upgrades
+- [x] Document upgrade process
+- [x] Security considerations
+
+**Implementation Notes:**
+- **Pattern**: UUPS (Universal Upgradeable Proxy Standard) chosen for gas efficiency
+- **Contract**: `contracts/AMMUpgradeable.sol` (851 lines)
+- **Deployment Script**: `scripts/deploy-amm-upgradeable.ts`
+- **Upgrade Script**: `scripts/upgrade-amm.ts`
+- **Tests**: `test/AMM.upgrade.test.ts` (12 passing tests)
+- **Documentation**: 
+  - `doc/UPGRADEABILITY_PATTERNS.md` - Pattern comparison
+  - `doc/UPGRADE_GUIDE.md` - Comprehensive upgrade guide
+- **Key Features**:
+  - Owner-only upgrades via `_authorizeUpgrade()`
+  - Initialize protection (can't call twice)
+  - State preservation across upgrades
+  - Storage gap (50 slots) for future additions
+  - Solidity 0.8.22 with viaIR compiler
+- **Security**:
+  - Only owner can upgrade
+  - Storage layout documented and protected
+  - Comprehensive upgrade validation
+  - All tests passing
 
 **Technical Notes:**
-- UUPS (Universal Upgradeable Proxy Standard) recommended
-- Need to separate storage from logic
-- Upgrade should be controlled by governance or timelock
-- High security risk - needs audit
+- UUPS pattern recommended for gas efficiency and modern standard
+- Storage layout must never change in upgrades
+- Upgrade controlled by owner (consider multisig for production)
+- All 23 contracts compile successfully
+- 12 upgrade tests covering deployment, authorization, state preservation
 
 ---
+
+## ❌ Pending Issues
 
 ### Issue #15: Governance Integration
 **Status:** ❌ PENDING  

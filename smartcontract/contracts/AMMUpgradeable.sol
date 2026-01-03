@@ -2,8 +2,10 @@
 pragma solidity ^0.8.22;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 /// @notice Interface for flash loan callback
 /// @dev Contracts that want to receive flash loans must implement this interface
@@ -21,13 +23,15 @@ interface IFlashLoanReceiver {
     ) external;
 }
 
-/// @title Automated Market Maker (AMM) Contract
+/// @title Automated Market Maker (AMM) Contract - Upgradeable
 /// @notice Implements a constant product market maker (x * y = k) with liquidity provision
 /// @dev Security Features:
 ///      - Minimum liquidity lock prevents pool drainage attacks
 ///      - ReentrancyGuard protects against reentrancy attacks
 ///      - Ownable pattern for access control
-contract AMM is ReentrancyGuard, Ownable {
+///      - UUPS upgradeability pattern for future upgrades
+/// @custom:oz-upgrades-from AMM
+contract AMMUpgradeable is Initializable, ReentrancyGuardUpgradeable, OwnableUpgradeable, UUPSUpgradeable {
     struct Pool {
         address token0;
         address token1;
@@ -43,7 +47,8 @@ contract AMM is ReentrancyGuard, Ownable {
     mapping(bytes32 => Pool) private pools;
 
     // Global default fee in basis points (e.g., 30 = 0.30%)
-    uint16 public immutable defaultFeeBps;
+    // Note: Changed from immutable to regular state variable for upgradeability
+    uint16 public defaultFeeBps;
 
     /// @notice Address representing native ETH
     /// @dev address(0) is used to represent native ETH in token addresses
@@ -174,10 +179,32 @@ contract AMM is ReentrancyGuard, Ownable {
         uint256 timestamp
     );
 
-    constructor(uint16 _defaultFeeBps) Ownable(msg.sender) {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /// @notice Initialize the contract (replaces constructor for upgradeable pattern)
+    /// @dev Can only be called once due to initializer modifier
+    /// @param _defaultFeeBps Default fee in basis points (1-1000)
+    function initialize(uint16 _defaultFeeBps) public initializer {
         if (_defaultFeeBps > 1000) revert FeeTooHigh();
+        
+        __ReentrancyGuard_init();
+        __Ownable_init(msg.sender);
+        __UUPSUpgradeable_init();
+        
         defaultFeeBps = _defaultFeeBps;
     }
+
+    /// @notice Authorize upgrade (only owner can upgrade)
+    /// @dev Required by UUPSUpgradeable
+    /// @param newImplementation Address of the new implementation contract
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    /// @dev Storage gap for future upgrades
+    /// @dev Reserves 50 storage slots for future state variables without breaking storage layout
+    uint256[50] private __gap;
 
     function getPool(
         bytes32 poolId

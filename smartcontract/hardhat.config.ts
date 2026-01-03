@@ -1,6 +1,7 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 import "@nomicfoundation/hardhat-chai-matchers";
+import "@openzeppelin/hardhat-upgrades";
 import "hardhat-gas-reporter";
 
 // If not set, it uses ours Alchemy's default API key.
@@ -18,12 +19,13 @@ const config: HardhatUserConfig = {
   solidity: {
     compilers: [
       {
-        version: "0.8.20",
+        version: "0.8.22",
         settings: {
           optimizer: {
             enabled: true,
             runs: 200,
           },
+          viaIR: true,
         },
       },
     ],
